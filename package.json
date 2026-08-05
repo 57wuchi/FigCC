@@ -1,0 +1,60 @@
+{
+  "name": "figcodex",
+  "version": "1.0.0",
+  "description": "FigCodex — a Codex-powered Figma plugin for inspecting and editing the current canvas through a local, auto-reviewed bridge.",
+  "main": "code.js",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "rollup -c --bundleConfigAsCjs -w",
+    "bridge": "node bridge/server.js",
+    "bridge:install": "node scripts/bridge-service.js install",
+    "bridge:uninstall": "node scripts/bridge-service.js uninstall",
+    "bridge:status": "node scripts/bridge-service.js status",
+    "bridge:token": "node scripts/print-bridge-token.js",
+    "bridge:smoke": "node scripts/smoke-bridge.js",
+    "bridge:review-smoke": "node scripts/smoke-review.js",
+    "bridge:permissions-smoke": "node scripts/smoke-permissions.js",
+    "bridge:selection-smoke": "node scripts/smoke-selection-context.js",
+    "codex:schema": "node scripts/generate-codex-schema.js",
+    "check": "npm run build && npm run test",
+    "test": "node --test test/*.test.js"
+  },
+  "type": "module",
+  "author": "FigCodex contributors",
+  "contributors": [
+    "Pavel Laptev (original FigClaw author)"
+  ],
+  "keywords": [
+    "figma",
+    "figma-plugin",
+    "codex",
+    "codex-cli",
+    "design-agent"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.110.0",
+    "@rollup/plugin-commonjs": "^25.0.8",
+    "@rollup/plugin-image": "^3.0.3",
+    "@rollup/plugin-node-resolve": "^15.3.1",
+    "@rollup/plugin-terser": "1.0.0",
+    "@rollup/plugin-typescript": "12.1.2",
+    "autoprefixer": "^10.4.21",
+    "cssnano": "^6.1.2",
+    "postcss": "^8.5.3",
+    "rollup": "^3.29.5",
+    "rollup-plugin-html-bundle": "^0.0.3",
+    "rollup-plugin-livereload": "^2.0.5",
+    "rollup-plugin-postcss": "^4.0.2",
+    "rollup-plugin-svelte": "^7.2.2",
+    "rollup-plugin-svg": "^2.0.0",
+    "svelte": "^5.0.0",
+    "ts-loader": "^9.5.2",
+    "tslib": "^2.8.1",
+    "typescript": "5.8.3"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "ws": "^8.18.3"
+  }
+}

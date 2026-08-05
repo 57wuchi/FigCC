@@ -1,0 +1,205 @@
+// ─── Tool definitions ─────────────────────────────────────────────────────────
+// Shared between the plugin sandbox (code.ts) and the UI iframe (UI.svelte).
+// The local bridge maps these definitions to Codex app-server dynamic tools.
+// Tool names are also used as the switch keys in executeTool() (code.ts).
+
+export const TOOLS = [
+  {
+    name: 'fetch_docs',
+    description:
+      'Fetches a Figma Plugin API documentation page and returns its content. ' +
+      'Use this when you are unsure about an API type, property, or method signature. ' +
+      'For common operations (shapes, fills, text, auto-layout, selection) you already know the API — skip this tool. ' +
+      'HOW TO USE: ' +
+      '1) To find a slug, fetch the index: https://raw.githubusercontent.com/PavelLaptev/figma-api-snapshot/master/out/index.json ' +
+      '2) Then fetch the page: https://raw.githubusercontent.com/PavelLaptev/figma-api-snapshot/master/out/raw/plugin-api/{slug}.json ' +
+      'Common slug patterns: node types → docs__plugins__api__FrameNode | figma methods → docs__plugins__api__properties__figma-createframe | node props → docs__plugins__api__properties__nodes-fills | data types → docs__plugins__api__Paint',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description:
+            'URL to fetch. Use the snapshot repo URLs described above, e.g. https://raw.githubusercontent.com/PavelLaptev/figma-api-snapshot/master/out/raw/plugin-api/docs__plugins__api__FrameNode.json',
+        },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'run_figma_code',
+    description:
+      'Executes arbitrary JavaScript in the Figma plugin context. ' +
+      'The code runs with full access to the `figma` global — all Plugin API methods are available. ' +
+      'Top-level `await` is supported (the code is wrapped in an async function). ' +
+      'Before calling this tool, ALWAYS show the code you are about to run in a text message so the user can see it. ' +
+      'IMPORTANT: To read a value back as the tool result, the code MUST end with an explicit `return` statement ' +
+      '(e.g. `return figma.currentPage.name`). Without a `return`, the result will always be `{ ok: true }` ' +
+      'regardless of what the code evaluates — never assume a value from the code unless it is explicitly returned.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'Valid JavaScript to execute. Has access to the `figma` global.',
+        },
+        description: {
+          type: 'string',
+          description: 'One-line summary of what this code does (shown in the UI).',
+        },
+      },
+      required: ['code', 'description'],
+    },
+  },
+  {
+    name: 'get_selection',
+    description: 'Returns the currently selected nodes in Figma with all their properties.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_page_nodes',
+    description: 'Returns nodes on the current page up to a given depth.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        depth: { type: 'number', description: 'How many levels deep to traverse (default 2)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_node_by_id',
+    description: 'Returns full properties of a specific node by its Figma ID.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'Figma node ID' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'get_styles',
+    description: 'Returns all local paint, text, effect, and grid styles defined in the document.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_variables',
+    description:
+      'Returns all local variable collections and their variables. ' +
+      'Each collection includes its modes and the full list of variables with resolved values per mode. ' +
+      'Use this before reading or writing design tokens / variables.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_components',
+    description:
+      'Returns all local components and component sets (variant groups) on the current page. ' +
+      'Includes name, id, description, and component properties.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_pages',
+    description: 'Returns all pages in the document with their id, name, and top-level node count.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'notify',
+    description: 'Shows a toast notification inside Figma.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        timeout: { type: 'number' },
+        error: { type: 'boolean' },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'create_skill',
+    description:
+      'Creates a new custom skill and saves it to the plugin. ' +
+      'Use this when the user asks to create, add, or generate a new skill document. ' +
+      'Skills are instruction documents that shape how the plugin behaves for specific tasks.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Name for the new skill (without file extension).',
+        },
+        content: {
+          type: 'string',
+          description: 'Full markdown content for the skill.',
+        },
+      },
+      required: ['name', 'content'],
+    },
+  },
+  {
+    name: 'update_skill',
+    description:
+      'Updates the content of an existing custom skill that the user has uploaded. ' +
+      'Use this when the user asks to modify, improve, or update one of their loaded skills. ' +
+      'You can only update skills the user has already uploaded — you cannot create new ones with this tool. ' +
+      'To find available skill ids and names, they are listed in the system prompt under "Custom Skills".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The id of the skill to update.',
+        },
+        name: {
+          type: 'string',
+          description: 'The new name for the skill (without file extension).',
+        },
+        content: {
+          type: 'string',
+          description: 'The full updated content for the skill.',
+        },
+      },
+      required: ['id', 'content'],
+    },
+  },
+  {
+    name: 'download_files',
+    description:
+      "Triggers a file download in the user's browser from inside the plugin. " +
+      "Use this to save exported SVGs, PNGs, or any other binary/text data to the user's disk. " +
+      'Each file needs a filename and its content. ' +
+      'For SVG exports use exportAsync with format "SVG_STRING" to get the content as a string. ' +
+      'For binary formats (PNG, JPG, PDF) use exportAsync with the appropriate format — the result is a Uint8Array; ' +
+      'pass it directly as the content value and set isBinary to true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          description: 'Array of files to download.',
+          items: {
+            type: 'object',
+            properties: {
+              filename: {
+                type: 'string',
+                description: 'File name including extension, e.g. "icon-arrow.svg"',
+              },
+              content: {
+                description:
+                  'File content. String for text formats (SVG_STRING, etc.) or Uint8Array for binary.',
+              },
+              mimeType: {
+                type: 'string',
+                description:
+                  'MIME type, e.g. "image/svg+xml", "image/png". Defaults to "application/octet-stream".',
+              },
+            },
+            required: ['filename', 'content'],
+          },
+        },
+      },
+      required: ['files'],
+    },
+  },
+] as const;
+
+export type ToolName = (typeof TOOLS)[number]['name'];

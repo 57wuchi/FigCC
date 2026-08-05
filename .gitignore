@@ -1,0 +1,18 @@
+# Node
+*.log
+*.log.*
+node_modules
+pnpm-lock.yaml
+.DS_Store
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.figcodex-data
+.figclaw-data
+.codex-schema
+
+public/build
+public/code.js
+public/index.html
