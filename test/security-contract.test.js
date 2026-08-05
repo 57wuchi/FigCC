@@ -32,6 +32,7 @@ test('bridge binds to loopback by default and requires a pairing token', async (
   assert.ok(serverSource.includes("approvalPolicy: 'on-request'"));
   assert.ok(serverSource.includes("approvalsReviewer: 'auto_review'"));
   assert.ok(serverSource.includes("sandbox: 'read-only'"));
+  assert.ok(serverSource.includes("permissionProfile/list"));
   assert.ok(serverSource.includes('runtimeWorkspaceRoots: [ROOT]'));
   assert.ok(appServerSource.includes("args.push('-c', override)"));
 });

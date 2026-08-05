@@ -6,8 +6,8 @@ import {
   reviewableArguments,
 } from '../bridge/dynamic-tool-reviewer.js';
 
-test('only side-effecting FigCodex tools require bridge auto-review', () => {
-  assert.equal(needsDynamicToolReview('run_figma_code'), true);
+test('canvas code runs directly while local side effects require bridge auto-review', () => {
+  assert.equal(needsDynamicToolReview('run_figma_code'), false);
   assert.equal(needsDynamicToolReview('create_skill'), true);
   assert.equal(needsDynamicToolReview('update_skill'), true);
   assert.equal(needsDynamicToolReview('download_files'), true);

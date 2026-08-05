@@ -8,11 +8,11 @@
   </div>
   <div class="intro">
     <h1>Work with your canvas</h1>
-    <p>Select a layer or describe a change. FigCodex can inspect the file, reason with Codex, and apply reviewed edits.</p>
+    <p>Select a layer or describe a change. FigCodex can inspect the file, reason with Codex, and edit the canvas directly.</p>
   </div>
   <div class="capabilities" aria-label="Available context">
     <span>Selection aware</span>
-    <span>Auto reviewed</span>
+    <span>Canvas ready</span>
     <span>Local bridge</span>
   </div>
 </div>

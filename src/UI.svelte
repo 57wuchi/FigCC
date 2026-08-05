@@ -12,6 +12,7 @@
     type SelectionContext,
   } from './components/Composer.svelte';
   import type { CodexModelOption } from './components/ModelPicker.svelte';
+  import type { CodexPermissionProfile } from './components/PermissionPicker.svelte';
   import EmptyChat from './components/EmptyChat.svelte';
   import { TOOLS } from './tools';
   import SYSTEM_PROMPT from './system-prompt.md?raw';
@@ -74,8 +75,10 @@
   let bridgeStatus = $state<'disconnected' | 'connecting' | 'ready' | 'error'>('disconnected');
   let bridgeDetail = $state('');
   let codexModels = $state<CodexModelOption[]>([]);
+  let codexPermissionProfiles = $state<CodexPermissionProfile[]>([]);
   let model = $state('');
   let effort = $state('');
+  let permissionProfile = $state(':read-only');
   let prompt = $state('');
   let attachedImages = $state<AttachedImage[]>([]);
   let selectionContext = $state<SelectionContext | null>(null);
@@ -469,16 +472,31 @@
   function saveBridgeSettings() {
     sendToPlugin({
       type: 'save-settings',
-      settings: { bridgeUrl, bridgeToken, model, effort },
+      settings: { bridgeUrl, bridgeToken, model, effort, permissionProfile },
     });
   }
 
-  function persistRuntimePreferences(nextModel: string, nextEffort: string) {
+  function persistRuntimePreferences(
+    nextModel: string,
+    nextEffort: string,
+    nextPermissionProfile: string
+  ) {
     sendToPlugin({
       type: 'save-runtime-preferences',
       model: nextModel,
       effort: nextEffort,
+      permissionProfile: nextPermissionProfile,
     });
+  }
+
+  function filesystemBoundary(): string {
+    if (permissionProfile === ':workspace') {
+      return 'The user selected Workspace access. Project-root reads and writes may run within the enforced workspace sandbox; stay inside the FigCodex project root and make only explicitly requested file changes.';
+    }
+    if (permissionProfile === ':danger-full-access') {
+      return 'The user selected Full access. There is no filesystem sandbox, but you must still use shell or filesystem tools only for explicit project-file requests and keep every change narrowly scoped.';
+    }
+    return 'The user selected Read only. Explicit project-file writes must request the narrowest necessary filesystem escalation and are subject to automatic permission review.';
   }
 
   function fallbackContext(): string {
@@ -617,6 +635,9 @@
       codexModels = Array.isArray(message.models)
         ? (message.models as CodexModelOption[]).filter((item) => item && item.id)
         : [];
+      codexPermissionProfiles = Array.isArray(message.permissionProfiles)
+        ? (message.permissionProfiles as CodexPermissionProfile[]).filter((item) => item && item.id)
+        : [];
       const selectedModel = codexModels.find((item) => item.id === model)
         || codexModels.find((item) => item.isDefault)
         || codexModels[0];
@@ -625,10 +646,20 @@
         (selectedModel?.supportedReasoningEfforts || []).map((item) => item.id)
       );
       const nextEffort = effort && supportedEfforts.has(effort) ? effort : '';
-      if (model !== nextModel || effort !== nextEffort) {
+      const selectedPermissionProfile = codexPermissionProfiles.find(
+        (item) => item.id === permissionProfile
+      ) || codexPermissionProfiles.find((item) => item.id === ':read-only')
+        || codexPermissionProfiles[0];
+      const nextPermissionProfile = selectedPermissionProfile?.id || ':read-only';
+      if (
+        model !== nextModel
+        || effort !== nextEffort
+        || permissionProfile !== nextPermissionProfile
+      ) {
         model = nextModel;
         effort = nextEffort;
-        persistRuntimePreferences(model, effort);
+        permissionProfile = nextPermissionProfile;
+        persistRuntimePreferences(model, effort, permissionProfile);
       }
       bridgeDetail = `Codex CLI ${String(message.cliVersion || '')} · ${String(message.auth || 'Logged in')}`;
       statusMessage = 'Codex is ready ✨';
@@ -664,7 +695,7 @@
         toolStatus: 'running',
         toolRequestId: `review:${requestId}`,
       });
-      statusMessage = 'Auto-reviewing the proposed Figma action…';
+      statusMessage = 'Auto-reviewing the proposed local action…';
       return;
     }
     if (type === 'review.completed') {
@@ -732,10 +763,11 @@
         threadId: currentThreadId,
         prompt: userText,
         fallbackContext: importedContext,
-        instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCodex dynamic tools for all Figma inspection and canvas changes. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use Codex filesystem or shell tools, and then only inside the FigCodex project root with the narrowest necessary change; filesystem escalation is subject to automatic permission review.`,
+        instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCodex dynamic tools for all Figma inspection and canvas changes. Canvas tool calls execute directly and are not filesystem permission requests. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use Codex filesystem or shell tools. ${filesystemBoundary()}`,
         tools: TOOLS,
         model,
         effort,
+        permissionProfile,
         images: images.map((image) => ({ dataUrl: image.dataUrl, mediaType: image.mediaType })),
       });
     } catch (error) {
@@ -921,6 +953,7 @@
         bridgeToken = String(msg.settings.bridgeToken || '');
         model = String(msg.settings.model || '');
         effort = String(msg.settings.effort || '');
+        permissionProfile = String(msg.settings.permissionProfile || ':read-only');
       }
       if (Array.isArray(msg.skills)) {
         skills = normalizeSkills(msg.skills as Skill[]);
@@ -944,6 +977,7 @@
         bridgeToken = String(msg.settings.bridgeToken || bridgeToken);
         model = String(msg.settings.model || model);
         effort = String(msg.settings.effort || effort);
+        permissionProfile = String(msg.settings.permissionProfile || permissionProfile);
       }
       statusMessage = 'Settings saved.';
       connectBridge();
@@ -1081,7 +1115,9 @@
         bind:attachedImages
         bind:model
         bind:effort
+        bind:permissionProfile
         models={codexModels}
+        permissionProfiles={codexPermissionProfiles}
         selectionContext={activeSelectionContext}
         skills={allSkills.filter((s) => !s.isDefault && s.mode === 'passive')}
         {isSending}

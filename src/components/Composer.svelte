@@ -2,6 +2,7 @@
   import Button from './Button.svelte';
   import Icon from './Icon.svelte';
   import ModelPicker, { type CodexModelOption } from './ModelPicker.svelte';
+  import PermissionPicker, { type CodexPermissionProfile } from './PermissionPicker.svelte';
 
   export type AttachedImage = {
     dataUrl: string;
@@ -43,7 +44,9 @@
     attachedImages = $bindable<AttachedImage[]>([]),
     model = $bindable(''),
     effort = $bindable(''),
+    permissionProfile = $bindable(':read-only'),
     models = [],
+    permissionProfiles = [],
     selectionContext = null,
     skills = [],
     isSending,
@@ -56,14 +59,16 @@
     attachedImages: AttachedImage[];
     model: string;
     effort: string;
+    permissionProfile: string;
     models?: CodexModelOption[];
+    permissionProfiles?: CodexPermissionProfile[];
     selectionContext?: SelectionContext | null;
     skills?: Skill[];
     isSending: boolean;
     onSend: () => void;
     onStop?: () => void;
     onDismissSelection?: () => void;
-    onRuntimePreferenceChange?: (model: string, effort: string) => void;
+    onRuntimePreferenceChange?: (model: string, effort: string, permissionProfile: string) => void;
   } = $props();
 
   let fileInput: HTMLInputElement | null = null;
@@ -354,7 +359,21 @@
           bind:effort
           {models}
           disabled={isSending || models.length === 0}
-          onchange={onRuntimePreferenceChange}
+          onchange={(nextModel, nextEffort) => onRuntimePreferenceChange?.(
+            nextModel,
+            nextEffort,
+            permissionProfile
+          )}
+        />
+        <PermissionPicker
+          bind:permissionProfile
+          profiles={permissionProfiles}
+          disabled={isSending || permissionProfiles.length === 0}
+          onchange={(nextPermissionProfile) => onRuntimePreferenceChange?.(
+            model,
+            effort,
+            nextPermissionProfile
+          )}
         />
       </div>
       {#if isSending}

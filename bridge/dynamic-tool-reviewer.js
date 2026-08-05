@@ -1,7 +1,6 @@
 const REVIEW_TIMEOUT_MS = 90_000;
 
 export const REVIEW_REQUIRED_TOOLS = new Set([
-  'run_figma_code',
   'create_skill',
   'update_skill',
   'download_files',
@@ -24,10 +23,9 @@ the output schema.
 
 Approve only when the proposed action is directly authorized by the current user request, is
 reasonably scoped to that request, and does not expose secrets, weaken security, or perform an
-unrelated destructive action. A normal, reversible Figma document edit explicitly requested by the
-user may be approved. A narrowly requested skill edit or file download may be approved. Deletion,
-bulk replacement, credential access, data exfiltration, or an action whose scope cannot be
-understood must be denied unless the user explicitly and narrowly authorized it.
+unrelated destructive action. A narrowly requested skill edit or file download may be approved.
+Deletion, bulk replacement, credential access, data exfiltration, or an action whose scope cannot
+be understood must be denied unless the user explicitly and narrowly authorized it.
 
 Judge the proposed action itself. Do not execute tools, modify files, or invent missing consent.
 If evidence is incomplete or the proposal is malformed, deny it. Keep reason concise and concrete.`;
@@ -92,12 +90,6 @@ function summarizeDownloadArguments(args) {
 
 export function reviewableArguments(tool, args) {
   if (tool === 'download_files') return summarizeDownloadArguments(args);
-  if (tool === 'run_figma_code') {
-    return {
-      description: String(args?.description || '').slice(0, 2_000),
-      code: String(args?.code || '').slice(0, 100_000),
-    };
-  }
   if (tool === 'create_skill' || tool === 'update_skill') {
     return {
       ...(tool === 'update_skill' ? { id: String(args?.id || '').slice(0, 500) } : {}),

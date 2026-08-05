@@ -27,17 +27,17 @@ FigCodex is an independent community project and is not affiliated with or endor
 Compared with the upstream FigClaw project, FigCodex currently includes:
 
 - **Local Codex runtime** — uses Codex CLI App Server and your existing Codex/ChatGPT login instead of calling the Claude API from the plugin iframe.
-- **Live model controls** — loads the installed CLI's model catalog and supported reasoning efforts, then lets you change both beside the Send button.
+- **Live runtime controls** — loads the installed CLI's model, reasoning-effort, and permission-profile catalogs, then lets you change them beside the Send button.
 - **Native thread resume** — preserves Codex thread IDs so later messages and cross-file chat resumes continue the same conversation.
 - **Selection-aware composer** — shows selected Figma text, images, frames, and mixed nodes before sending. Visual nodes include bounded rendered previews; text nodes include bounded text and style metadata.
 - **Reference images** — supports uploaded, pasted, and Figma-selection images in the same message.
-- **Automatic permission review** — read-only inspection runs directly; side-effecting Figma tools and project-file escalations are automatically reviewed and fail closed when approval cannot be established.
-- **Read-only Codex filesystem sandbox** — Codex starts with the project as its narrow runtime root and must request an automatically reviewed escalation for explicit project-file work.
+- **Direct canvas editing** — Figma inspection and canvas mutations run directly through the plugin sandbox, so normal drawing requests are not blocked by an unrelated consent review.
+- **Selectable local-file permissions** — Codex defaults to the CLI's Read only profile with automatically reviewed escalation for explicit project-file work; Workspace and Full access remain explicit user choices.
 - **Authenticated local transport** — the bridge binds to loopback and requires a persistent random pairing token.
 - **Persistent macOS bridge** — a user LaunchAgent can start the bridge at login and restart it if it exits.
 - **Skills** — upload Markdown skills, keep them always active, invoke passive skills with `@mentions`, or let the agent create and update skill documents.
 - **History and migration** — saves conversations across Figma files and imports compatible legacy FigClaw settings, history, skills, and pairing tokens.
-- **Codex-inspired interface** — FigCodex branding, compact native typography, purple glass mark, connection state, reviewed-action status, and a model/effort menu designed for the 400 px plugin panel.
+- **Codex-inspired interface** — FigCodex branding, compact native typography, purple glass mark, connection state, tool status, and compact model/effort/permission controls designed for the 400 px plugin panel.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Figma plugin UI
 FigCodex local bridge
     ⇅ JSON-RPC over stdio
 codex app-server
-    ⇅ dynamic tool calls and reviewed responses
+    ⇅ dynamic tool calls and results
 Figma plugin sandbox → current Figma document
 ```
 
@@ -64,7 +64,7 @@ Codex App Server is used instead of starting a new `codex exec` process for ever
 | `get_variables` | Read variable collections, modes, and resolved values. |
 | `get_components` | List components and component sets. |
 | `get_pages` | List document pages and child counts. |
-| `run_figma_code` | Execute reviewed Figma Plugin API JavaScript with top-level `await`. |
+| `run_figma_code` | Execute Figma Plugin API JavaScript directly with top-level `await`. |
 | `fetch_docs` | Fetch an allowlisted Figma Plugin API reference page. |
 | `notify` | Show a Figma toast. |
 | `download_files` | Download generated text or binary files, with ZIP fallback for multiple files. |
@@ -104,7 +104,7 @@ Then import the plugin:
 
 1. Optionally select one or more layers on the Figma canvas. Their context appears in the composer and can be excluded before sending.
 2. Type a request, paste/upload reference images, or invoke a passive skill with `@skill-name`.
-3. Choose a Codex model and reasoning effort beside **Send** when needed.
+3. Choose a Codex model, reasoning effort, and local-file permission profile beside **Send** when needed.
 4. Review the streamed tool/status messages while FigCodex works.
 
 Example requests:
@@ -131,13 +131,14 @@ Treat third-party skill files as code-like instructions: inspect them before ena
 
 - The bridge binds to `127.0.0.1` by default and rejects clients without the pairing token.
 - Pairing tokens and Codex credentials remain local and are never inserted into prompts.
-- Codex starts with `sandbox: read-only`, `approvalPolicy: on-request`, and `approvalsReviewer: auto_review`.
-- Side-effecting FigCodex tools pass through a separate bridge-side, fail-closed reviewer before reaching Figma.
+- Codex defaults to the live `:read-only` permission profile with `approvalPolicy: on-request` and `approvalsReviewer: auto_review`. Older compatible CLIs safely fall back to `sandbox: read-only`.
+- The permission control is populated by the live Codex App Server catalog. `:workspace` permits writes inside the project sandbox; `:danger-full-access` removes the filesystem sandbox and is shown as a warning choice.
+- Figma canvas tools, including `run_figma_code`, are forwarded directly to the plugin sandbox without bridge auto-review. Skill storage and downloads retain their separate fail-closed review boundary.
 - The Figma manifest has no wildcard network access. It allows only the loopback bridge and the allowlisted documentation host.
 - Selection previews remain in the plugin until the user presses Send.
 - `.figcodex-data/`, `.figclaw-data/`, logs, tokens, and generated App Server schemas are excluded from git.
 
-`run_figma_code` can modify the open Figma document. Use version history for important files and review generated actions proportionally to their impact.
+`run_figma_code` can modify the open Figma document without an approval pause. Use Figma version history for important files and review generated actions proportionally to their impact. The permission selector controls local project files, not the Figma canvas.
 
 ## Commands
 
@@ -152,7 +153,7 @@ Treat third-party skill files as code-like instructions: inspect them before ena
 | `npm run bridge:uninstall` | Stop and remove the persistent bridge service. |
 | `npm run bridge:token` | Print the persistent pairing token. |
 | `npm run bridge:smoke` | Test a real Codex dynamic tool call and thread resume. |
-| `npm run bridge:review-smoke` | Test automatic review for a side-effecting Figma tool. |
+| `npm run bridge:review-smoke` | Test that a Figma canvas tool bypasses auto-review and is forwarded directly. |
 | `npm run bridge:permissions-smoke` | Test an automatically reviewed project write. |
 | `npm run bridge:selection-smoke` | Test selection metadata and local-image input. |
 | `npm run codex:schema` | Generate current experimental App Server TypeScript bindings. |

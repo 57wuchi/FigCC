@@ -32,9 +32,9 @@ Do not weaken these without an explicit, security-reviewed request:
 
 - The bridge binds to loopback by default and requires the pairing token.
 - Pairing tokens, Codex credentials, `.figcodex-data/`, and `.figclaw-data/` must never enter git, prompts, UI diagnostics, or public logs.
-- Codex starts with a read-only filesystem sandbox, `approvalPolicy: on-request`, `approvalsReviewer: auto_review`, and this project as its narrow runtime root.
-- Read-only canvas inspection may run directly. Figma mutations, skill writes, downloads, and project-file escalations must retain their review boundary.
-- Bridge-side review fails closed. A parse error, timeout, unavailable reviewer, or uncertain decision is not approval.
+- Codex defaults to the live `:read-only` permission profile with `approvalPolicy: on-request`, `approvalsReviewer: auto_review`, and this project as its narrow runtime root. Workspace and full-access profiles remain explicit user choices.
+- Figma canvas inspection and mutations run directly through the plugin sandbox. Skill writes, downloads, and local project-file escalations retain their applicable review boundary.
+- Bridge-side review for actions that still require it fails closed. A parse error, timeout, unavailable reviewer, or uncertain decision is not approval.
 - Keep compatible user-configured MCP servers disabled for the dedicated canvas agent unless a deliberate architecture change is approved and tested.
 - Keep the Figma manifest allowlist narrow. Never add wildcard network domains.
 - Validate fetch targets in code in addition to the manifest.
@@ -47,7 +47,14 @@ Do not weaken these without an explicit, security-reviewed request:
 - Legacy FigClaw storage keys, `.figclaw-data`, pairing tokens, and environment variables are read only as migration fallbacks.
 - Do not remove a migration fallback without documenting the breaking change.
 - Preserve Codex thread IDs and the current thread policy version when changing chat history.
-- Model and reasoning-effort choices must come from the live App Server catalog; do not hard-code a marketing model list.
+- Model, reasoning-effort, and permission-profile choices must come from the live App Server catalogs; do not hard-code a marketing model or permissions list.
+
+## Pairing-token assistance
+
+- When the plugin reports that the pairing token was rejected, first run `npm run bridge:status` and verify that `.figcodex-data/bridge-token` exists and is non-empty. Compare migration tokens only with a boolean check such as `cmp -s`; never print either value.
+- If the user asks the Agent to obtain or enter the current token, do not run a command whose captured output contains the secret. On macOS, copy it directly to the system clipboard with `/usr/bin/pbcopy < .figcodex-data/bridge-token`.
+- After copying, tell the user to replace the complete **Local pairing token** field and choose **Save & Connect**. Reconnect alone does not persist a replacement token.
+- Never echo, `cat`, quote, paste into chat, include in diagnostics, or otherwise expose the pairing token. If the token file is missing, start or restart the bridge first, then repeat the non-printing existence check.
 
 ## UI and brand
 

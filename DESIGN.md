@@ -83,7 +83,7 @@ References:
 
 - The composer is the strongest surface in Chat.
 - Primary Send uses a light button with dark text.
-- The control beside Send shows the active Codex model and effective reasoning effort. Its options come from the local App Server model catalog, and unsupported efforts are never shown for a model.
+- The controls beside Send show the active Codex model, effective reasoning effort, and filesystem permission profile. Their options come from the local App Server catalogs, and unsupported choices are never shown.
 - Figma selection uses the selection token and includes node name, type, dimensions, and preview/text where useful.
 - Uploaded references and live Figma selection remain visually distinct.
 
@@ -97,7 +97,9 @@ References:
 
 - Pairing token is described as a local secret, never as an API key.
 - Connection state appears beside the bridge label and in text.
-- Auto review is explicit. It must not be described as bypassing permissions.
+- Figma canvas edits execute directly and are visually distinct from filesystem permissions.
+- The default filesystem profile is Read only. Workspace and Full access must remain explicit user choices, and Full access uses warning text in addition to color.
+- Auto review applies to local-file escalation and other local side effects. It must not be described as bypassing permissions.
 
 ## Accessibility and quality bar
 

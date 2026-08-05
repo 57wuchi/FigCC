@@ -27,6 +27,8 @@ test('open-source package preserves FigClaw attribution and bilingual guidance',
   assert.match(readmeZh, /本機 Codex/);
   assert.match(agents, /Security invariants/);
   assert.match(agent, /AGENTS\.md/);
+  assert.match(agents, /Pairing-token assistance/);
+  assert.match(agent, /\/usr\/bin\/pbcopy < \.figcodex-data\/bridge-token/);
   assert.match(claude, /does not ask users for a Claude API key/);
   assert.equal(packageJson.license, 'MIT');
   assert.equal(packageJson.author, 'FigCodex contributors');
