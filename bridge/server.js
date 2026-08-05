@@ -7,6 +7,10 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { CodexAppServer } from './codex-app-server.js';
 import { discoverCodex, readLoginStatus } from './codex-discovery.js';
 import { needsDynamicToolReview, reviewDynamicTool } from './dynamic-tool-reviewer.js';
+import {
+  normalizePermissionProfiles,
+  resolvePermissionProfile,
+} from './permission-profiles.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA_DIR = path.join(ROOT, '.figcodex-data');
@@ -23,6 +27,8 @@ let loginStatus = null;
 let codex = null;
 let startupError = null;
 let models = [];
+let permissionProfiles = normalizePermissionProfiles(null);
+let permissionProfilesSupported = false;
 let startupPromise = null;
 
 const threadOwners = new Map();
@@ -254,6 +260,21 @@ async function ensureCodex() {
         .filter((option) => option.id),
       defaultReasoningEffort: String(model.defaultReasoningEffort || '').trim(),
     })).filter((model) => model.id);
+    try {
+      const permissionResult = await instance.request('permissionProfile/list', {
+        cwd: ROOT,
+        limit: 100,
+      });
+      permissionProfiles = normalizePermissionProfiles(permissionResult);
+      permissionProfilesSupported = Array.isArray(permissionResult?.data)
+        && permissionResult.data.some((profile) => (
+          String(profile?.id || '').trim()
+          && profile?.allowed !== false
+        ));
+    } catch {
+      permissionProfiles = normalizePermissionProfiles(null);
+      permissionProfilesSupported = false;
+    }
     codex = instance;
     return codex;
   })();
@@ -313,6 +334,10 @@ async function startTurn(socket, message) {
     .some((item) => item.id === requestedEffort)
     ? requestedEffort
     : undefined;
+  const permissionProfile = resolvePermissionProfile(permissionProfiles, message.permissionProfile);
+  const permissionSettings = permissionProfilesSupported
+    ? { permissions: permissionProfile }
+    : { sandbox: 'read-only' };
   let threadId = String(message.threadId || '').trim();
   let resumed = false;
 
@@ -324,7 +349,7 @@ async function startTurn(socket, message) {
         runtimeWorkspaceRoots: [ROOT],
         approvalPolicy: 'on-request',
         approvalsReviewer: 'auto_review',
-        sandbox: 'read-only',
+        ...permissionSettings,
         developerInstructions,
         ...(model ? { model } : {}),
       });
@@ -340,7 +365,7 @@ async function startTurn(socket, message) {
       runtimeWorkspaceRoots: [ROOT],
       approvalPolicy: 'on-request',
       approvalsReviewer: 'auto_review',
-      sandbox: 'read-only',
+      ...permissionSettings,
       serviceName: 'figcodex_local_bridge',
       developerInstructions,
       personality: 'friendly',
@@ -398,6 +423,7 @@ async function handleMessage(socket, message, token) {
       codexBin: codexInfo?.binary || '',
       auth: loginStatus?.message || 'Logged in',
       models,
+      permissionProfiles,
       appServerReady: Boolean(instance.started),
     });
     return;

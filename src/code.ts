@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   bridgeToken: '',
   model: '',
   effort: '',
+  permissionProfile: ':read-only',
 };
 
 figma.showUI(__html__, { themeColors: true, width: 400, height: 680 });
@@ -44,6 +45,7 @@ async function getSettings(): Promise<typeof DEFAULT_SETTINGS> {
     bridgeToken: String(value.bridgeToken || ''),
     model: String(value.model || ''),
     effort: String(value.effort || ''),
+    permissionProfile: String(value.permissionProfile || DEFAULT_SETTINGS.permissionProfile),
   };
 }
 
@@ -54,6 +56,7 @@ async function saveSettings(input: unknown): Promise<void> {
     bridgeToken: String(value.bridgeToken || '').trim(),
     model: String(value.model || '').trim(),
     effort: String(value.effort || '').trim(),
+    permissionProfile: String(value.permissionProfile || DEFAULT_SETTINGS.permissionProfile).trim(),
   };
   await figma.clientStorage.setAsync(STORAGE_KEY_SETTINGS, settings);
   figma.ui.postMessage({ type: 'settings-saved', settings });
@@ -76,12 +79,17 @@ async function saveSkills(skills: unknown[]): Promise<void> {
   await figma.clientStorage.setAsync(STORAGE_KEY_SKILLS, skills);
 }
 
-async function saveRuntimePreferences(model: unknown, effort: unknown): Promise<void> {
+async function saveRuntimePreferences(
+  model: unknown,
+  effort: unknown,
+  permissionProfile: unknown
+): Promise<void> {
   const current = await getSettings();
   await figma.clientStorage.setAsync(STORAGE_KEY_SETTINGS, {
     ...current,
     model: String(model || '').trim(),
     effort: String(effort || '').trim(),
+    permissionProfile: String(permissionProfile || DEFAULT_SETTINGS.permissionProfile).trim(),
   });
 }
 
@@ -116,7 +124,7 @@ async function handleStorageMessage(msg: PluginMessage): Promise<boolean> {
   }
 
   if (msg.type === 'save-runtime-preferences') {
-    await saveRuntimePreferences(msg.model, msg.effort);
+    await saveRuntimePreferences(msg.model, msg.effort, msg.permissionProfile);
     return true;
   }
 

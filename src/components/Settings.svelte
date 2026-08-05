@@ -64,11 +64,11 @@
 
   <div class="permission-card">
     <div class="permission-title">
-      <span>Permission mode</span>
-      <Badge variant="saved">Auto review</Badge>
+      <span>Filesystem permissions</span>
+      <Badge variant="saved">Read only by default</Badge>
     </div>
     <div class="hint">
-      Project-file escalations and Figma actions that can make changes are reviewed automatically. Read-only canvas inspection runs directly.
+      Figma canvas edits run directly. Local project writes require automatic review in Read only mode; choose another CLI permission profile beside the model when needed.
     </div>
   </div>
 
@@ -84,7 +84,7 @@
     <p>1. Run <code>npm run bridge:install</code> once to keep the local bridge available.</p>
     <p>2. Run <code>npm run bridge:token</code>, paste the token above, and save.</p>
     <p>3. Codex authentication stays in the local CLI; FigCodex stores no model API key.</p>
-    <p>4. Choose the model and reasoning effort beside Send.</p>
+    <p>4. Choose the model, reasoning effort, and local-file permissions beside Send.</p>
   </div>
 </section>
 

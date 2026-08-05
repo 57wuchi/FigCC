@@ -53,6 +53,7 @@ socket.on('message', (raw) => {
       }],
       images: [],
       model: '',
+      permissionProfile: ':read-only',
     });
     return;
   }

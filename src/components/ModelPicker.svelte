@@ -226,9 +226,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    max-width: 190px;
+    max-width: 138px;
     height: var(--height-btn);
     padding: 0 7px;
+    overflow: hidden;
     border: 0;
     border-radius: var(--radius-md);
     background: transparent;

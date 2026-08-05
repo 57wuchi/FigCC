@@ -20,6 +20,7 @@ test('composer model and effort choices come from the Codex catalog and reach tu
   assert.ok(server.includes('...(effort ? { effort } : {})'));
   assert.ok(ui.includes("type: 'save-runtime-preferences'"));
   assert.ok(ui.includes('effort,'));
+  assert.ok(ui.includes('permissionProfile: nextPermissionProfile'));
   assert.ok(composer.includes('<ModelPicker'));
   assert.ok(picker.includes('Reasoning effort'));
   assert.ok(picker.includes('Model default'));

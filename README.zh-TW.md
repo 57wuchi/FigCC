@@ -27,17 +27,17 @@ FigCodex 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬�
 相較於上游 FigClaw，目前 FigCodex 包含：
 
 - **本機 Codex 執行環境**：透過 Codex CLI App Server 與既有的 Codex／ChatGPT 登入執行，不再由外掛 iframe 直接呼叫 Claude API。
-- **即時模型設定**：讀取本機 CLI 實際提供的模型與 reasoning effort，在 Send 旁即可切換。
+- **即時執行設定**：讀取本機 CLI 實際提供的模型、reasoning effort 與權限 profiles，在 Send 旁即可切換。
 - **原生 thread 續接**：保存 Codex thread ID，後續訊息與跨 Figma 檔案恢復聊天時會繼續同一個 conversation。
 - **感知畫布選取內容**：送出前會在 composer 顯示選取的文字、圖片、Frame 或混合節點；視覺節點包含有上限的渲染預覽，文字節點包含有上限的文字與樣式資料。
 - **參考圖片**：同一則訊息可加入上傳圖片、貼上的圖片，以及 Figma 選取節點的圖片預覽。
-- **自動權限審查**：唯讀檢查可直接執行；會修改 Figma 或要求專案檔案權限的操作會先自動審查，無法確認時採 fail-closed。
-- **唯讀 Codex 檔案沙箱**：Codex 預設以專案為最小 runtime root；只有使用者明確要求專案檔案工作時，才能提出自動審查的權限升級。
+- **畫布操作直接執行**：Figma 檢查與畫布修改都直接透過 plugin sandbox 執行，一般繪圖不再被不相干的授權審查擋住。
+- **可選本機檔案權限**：Codex 預設使用 CLI 的 Read only profile；明確要求專案檔案寫入時才自動審查升級。Workspace 與 Full access 必須由使用者主動選擇。
 - **有驗證的本機傳輸**：bridge 只綁定 loopback，並要求持久保存的隨機 pairing token。
 - **macOS 常駐 bridge**：可安裝使用者層級 LaunchAgent，登入時啟動，意外退出時自動重啟。
 - **Skills**：上傳 Markdown skill、設為每回合啟用、用 `@mention` 叫用 passive skill，或讓 Agent 建立與更新 skill。
 - **歷史記錄與遷移**：聊天可跨 Figma 檔案保存，並相容匯入舊 FigClaw 的設定、歷史、skills 與 pairing token。
-- **FigCodex 視覺介面**：包含紫色玻璃品牌圖形、Codex 一致的字體、連線狀態、審查狀態，以及適合 400 px 外掛面板的模型／effort 選單。
+- **FigCodex 視覺介面**：包含紫色玻璃品牌圖形、Codex 一致的字體、連線與工具狀態，以及適合 400 px 外掛面板的模型／effort／權限控制。
 
 ## 架構
 
@@ -47,7 +47,7 @@ Figma plugin UI
 FigCodex 本機 bridge
     ⇅ stdio JSON-RPC
 codex app-server
-    ⇅ dynamic tool 呼叫與審查結果
+    ⇅ dynamic tool 呼叫與結果
 Figma plugin sandbox → 目前的 Figma 文件
 ```
 
@@ -64,7 +64,7 @@ FigCodex 不會為每個 prompt 重新啟動一次 `codex exec`。App Server 可
 | `get_variables` | 讀取 variables collection、modes 與解析值。 |
 | `get_components` | 列出 components 與 component sets。 |
 | `get_pages` | 列出頁面與子節點數量。 |
-| `run_figma_code` | 執行通過審查、支援頂層 `await` 的 Figma Plugin API JavaScript。 |
+| `run_figma_code` | 直接執行支援頂層 `await` 的 Figma Plugin API JavaScript。 |
 | `fetch_docs` | 讀取 allowlist 內的 Figma Plugin API 參考文件。 |
 | `notify` | 顯示 Figma toast。 |
 | `download_files` | 下載產生的文字或二進位檔案，多檔時可使用 ZIP。 |
@@ -104,7 +104,7 @@ npm run bridge:token
 
 1. 可先在 Figma 畫布選取一個或多個圖層。相關內容會出現在 composer，送出前可以排除。
 2. 輸入要求、貼上或上傳參考圖片，也可以用 `@skill-name` 叫用 passive skill。
-3. 需要時在 **Send** 左側選擇 Codex 模型與 reasoning effort。
+3. 需要時在 **Send** 左側選擇 Codex 模型、reasoning effort 與本機檔案權限 profile。
 4. 執行期間可在對話中看到串流回答、工具與自動審查狀態。
 
 範例：
@@ -131,13 +131,14 @@ npm run bridge:token
 
 - Bridge 預設只綁定 `127.0.0.1`，沒有 pairing token 的 client 會被拒絕。
 - Pairing token 與 Codex 登入憑證只留在本機，不會加入 prompt。
-- Codex 以 `sandbox: read-only`、`approvalPolicy: on-request`、`approvalsReviewer: auto_review` 啟動。
-- 會產生副作用的 FigCodex tools 會先通過 bridge 端獨立、fail-closed 的審查，才會送進 Figma。
+- Codex 預設使用 live `:read-only` 權限 profile，搭配 `approvalPolicy: on-request` 與 `approvalsReviewer: auto_review`；較舊的相容 CLI 會安全退回 `sandbox: read-only`。
+- 權限選單來自 Codex App Server 的 live catalog。`:workspace` 可在專案 sandbox 內寫入；`:danger-full-access` 會移除檔案沙箱，介面會以警告選項顯示。
+- 包含 `run_figma_code` 在內的 Figma 畫布工具會直接送進 plugin sandbox，不經 bridge auto-review；skill storage 與下載仍保留獨立、fail-closed 的審查邊界。
 - Figma manifest 沒有 wildcard 網路權限，只允許本機 bridge 與 allowlist 文件來源。
 - 畫布選取預覽在按下 Send 前不會離開外掛。
 - `.figcodex-data/`、`.figclaw-data/`、logs、tokens 與產生的 App Server schemas 都不會加入 git。
 
-`run_figma_code` 可以修改目前開啟的 Figma 文件。重要檔案請保留 version history，並依操作影響程度檢查產生的行為。
+`run_figma_code` 可以不經核准停頓，直接修改目前開啟的 Figma 文件。重要檔案請保留 Figma version history，並依影響程度檢查產生的行為。權限選單控制的是本機專案檔案，不是 Figma 畫布。
 
 ## 常用指令
 
@@ -152,7 +153,7 @@ npm run bridge:token
 | `npm run bridge:uninstall` | 停止並移除常駐 bridge。 |
 | `npm run bridge:token` | 顯示持久保存的 pairing token。 |
 | `npm run bridge:smoke` | 測試真實 Codex tool call 與 thread resume。 |
-| `npm run bridge:review-smoke` | 測試會修改 Figma 的工具是否經過自動審查。 |
+| `npm run bridge:review-smoke` | 測試 Figma 畫布工具會略過 auto-review 並直接轉送。 |
 | `npm run bridge:permissions-smoke` | 測試自動審查的專案檔案寫入。 |
 | `npm run bridge:selection-smoke` | 測試選取 metadata 與 local image input。 |
 | `npm run codex:schema` | 產生目前實驗性 App Server TypeScript bindings。 |
