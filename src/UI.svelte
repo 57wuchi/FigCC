@@ -1140,7 +1140,10 @@
 
   main.auto-height {
     height: auto;
-    overflow: visible;
+    max-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
   }
 
   .chat-wrapper {
@@ -1181,7 +1184,6 @@
   /* Chat */
   .chat {
     height: 100%;
-    overflow-y: auto;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
