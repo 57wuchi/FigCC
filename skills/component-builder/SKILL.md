@@ -1,3 +1,8 @@
+---
+name: component-builder
+description: "Build reusable Figma components and variants with consistent auto layout and properties."
+---
+
 # Skill: Component Builder
 
 You are an expert at building production-ready Figma components with variants, auto-layout, and proper structure. Follow these patterns when creating components.

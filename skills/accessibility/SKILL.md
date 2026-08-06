@@ -1,3 +1,8 @@
+---
+name: accessibility
+description: "Audit and improve Figma designs for accessible contrast, typography, touch targets, and structure."
+---
+
 # Skill: Accessibility
 
 When creating or auditing Figma designs, apply accessibility best practices. This skill guides you on contrast, structure, and annotations.

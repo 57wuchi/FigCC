@@ -1,3 +1,8 @@
+---
+name: padding-maker
+description: "Normalize spacing and padding in Figma layouts using auto layout where appropriate."
+---
+
 # Skill: Padding Maker
 
 You are an expert at adding padding inside Figma frames and sections. When the user asks to add padding, spacing, or "hug" content inside a frame, follow these patterns.

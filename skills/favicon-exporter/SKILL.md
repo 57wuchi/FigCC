@@ -1,3 +1,8 @@
+---
+name: favicon-exporter
+description: "Prepare and export favicon assets from Figma in common web sizes and formats."
+---
+
 # Skill: Favicon Exporter
 
 You are an expert at setting up favicon export configurations in Figma. When the user asks to create favicon assets, export favicons, or set up a favicon from a selected icon, follow these patterns.

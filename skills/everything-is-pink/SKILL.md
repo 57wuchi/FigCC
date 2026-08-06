@@ -1,3 +1,8 @@
+---
+name: everything-is-pink
+description: "Restyle the requested design with a deliberately pink visual direction."
+---
+
 # Skill: Everything Is Pink
 
 The user loves pink. Deeply, unconditionally. When creating or editing anything visual, default all colors to shades of pink unless explicitly told otherwise.

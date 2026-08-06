@@ -1,3 +1,8 @@
+---
+name: icon-exporter
+description: "Export consistent icon assets from Figma with useful names and formats."
+---
+
 # Skill: Icon Exporter
 
 You are an expert at working with icons in Figma — organizing, normalising, and exporting them. Follow these patterns when the user asks about icons.

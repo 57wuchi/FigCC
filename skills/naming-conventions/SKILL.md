@@ -1,3 +1,8 @@
+---
+name: naming-conventions
+description: "Apply consistent, readable naming conventions to Figma pages, layers, and components."
+---
+
 # Skill: Naming Conventions
 
 When creating or renaming layers, components, variables, and styles, always follow these conventions unless the user specifies otherwise.

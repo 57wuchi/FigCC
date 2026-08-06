@@ -1,3 +1,8 @@
+---
+name: design-tokens
+description: "Create and maintain coherent Figma variables and design-token systems."
+---
+
 # Skill: Design Tokens
 
 You have deep expertise in Figma Variables (design tokens). When the user asks about tokens, variables, or design systems, follow these guidelines.

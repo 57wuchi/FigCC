@@ -1,3 +1,8 @@
+---
+name: rename-to-file-safe
+description: "Rename selected Figma layers to deterministic file-safe names."
+---
+
 # Skill: Rename Layers to File-Safe Names
 
 Rename selected layer names into a format safe for use as image file names: all lowercase, spaces replaced with hyphens, and special characters removed.
