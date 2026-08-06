@@ -8,6 +8,7 @@
     role: 'user' | 'assistant' | 'tool' | 'code';
     text: string;
     images?: string[];
+    files?: Array<{ name: string; mediaType: string; size: number }>;
     toolName?: string;
     toolStatus?: 'running' | 'done' | 'error';
   };
@@ -28,7 +29,11 @@
     title: string;
     savedAt: number;
     displayMessages: DisplayMessage[];
-    apiHistory: ApiMessage[];
+    apiHistory?: ApiMessage[];
+    threadId?: string | null;
+    sessionId?: string | null;
+    provider?: 'codex' | 'claude';
+    policyVersion?: string;
   };
 
   let {
@@ -60,6 +65,10 @@
 
   function msgCount(chat: SavedChat): number {
     return chat.displayMessages.filter((m) => m.role === 'user' || m.role === 'assistant').length;
+  }
+
+  function providerName(chat: SavedChat): string {
+    return chat.provider === 'claude' ? 'Claude' : 'Codex';
   }
 
   let listEl = $state<HTMLElement | null>(null);
@@ -112,6 +121,7 @@
         <li class="item active">
           <div class="item-meta">
             <span class="title">{chat.title}</span>
+            <Badge variant="label">{providerName(chat)}</Badge>
             <Badge variant="active">applied</Badge>
           </div>
           <span class="sub">{formatDate(chat.savedAt)} · {msgCount(chat)} messages</span>
@@ -129,6 +139,7 @@
         <li class="item">
           <div class="item-meta">
             <span class="title">{chat.title}</span>
+            <Badge variant="label">{providerName(chat)}</Badge>
           </div>
           <span class="sub">{formatDate(chat.savedAt)} · {msgCount(chat)} messages</span>
           <div class="item-actions">

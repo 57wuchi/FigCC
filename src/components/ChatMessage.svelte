@@ -6,12 +6,13 @@
     role: 'user' | 'assistant' | 'tool' | 'code';
     text: string;
     images?: string[];
+    files?: Array<{ name: string; mediaType: string; size: number }>;
     toolName?: string;
     toolStatus?: 'running' | 'done' | 'error';
     figmaSelection?: string;
   };
 
-  let { msg }: { msg: DisplayMessage } = $props();
+  let { msg, provider = 'codex' }: { msg: DisplayMessage; provider?: 'codex' | 'claude' } = $props();
 
   function splitCodeBlocks(text: string): TextPart[] {
     const parts: TextPart[] = [];
@@ -30,6 +31,12 @@
     if (tail) parts.push({ type: 'text', text: tail });
     return parts.length ? parts : [{ type: 'text', text }];
   }
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 </script>
 
 {#if msg.role === 'tool'}
@@ -45,7 +52,7 @@
 {:else}
   <div class="message {msg.role}">
     {#if msg.role === 'assistant'}
-      <p class="meta">Codex</p>
+      <p class="meta">{provider === 'claude' ? 'Claude' : 'Codex'}</p>
     {/if}
     {#if msg.role === 'user' && msg.figmaSelection}
       <div class="figma-context">
@@ -57,6 +64,17 @@
       <div class="image-grid">
         {#each msg.images as src}
           <img class="attached-img" {src} alt="attachment" />
+        {/each}
+      </div>
+    {/if}
+    {#if msg.files && msg.files.length > 0}
+      <div class="attached-files">
+        {#each msg.files as file}
+          <div class="attached-file" title={file.name}>
+            <Icon name="paperclip" size={12} />
+            <span class="attached-file-name">{file.name}</span>
+            <span class="attached-file-size">{formatBytes(file.size)}</span>
+          </div>
         {/each}
       </div>
     {/if}
@@ -152,6 +170,38 @@
     object-fit: cover;
     border: 1px solid var(--color-border-1);
     cursor: zoom-in;
+  }
+
+  .attached-files {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .attached-file {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 1px solid var(--color-border-1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: 10px;
+  }
+
+  .attached-file-name {
+    overflow: hidden;
+    flex: 1;
+    color: var(--color-text-primary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attached-file-size {
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
   }
 
   /* Code block */

@@ -1,15 +1,22 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Icon from './Icon.svelte';
-  import ModelPicker, { type CodexModelOption } from './ModelPicker.svelte';
-  import PermissionPicker, { type CodexPermissionProfile } from './PermissionPicker.svelte';
+  import ModelPicker, { type ModelOption } from './ModelPicker.svelte';
+  import PermissionPicker, { type PermissionProfile } from './PermissionPicker.svelte';
 
   export type AttachedImage = {
     dataUrl: string;
     mediaType: string;
     name: string;
+    size?: number;
     source?: 'upload' | 'figma-selection';
     nodeId?: string;
+  };
+  export type AttachedFile = {
+    dataUrl: string;
+    mediaType: string;
+    name: string;
+    size: number;
   };
   export type SelectionContextNode = {
     id: string;
@@ -42,11 +49,13 @@
   let {
     prompt = $bindable(''),
     attachedImages = $bindable<AttachedImage[]>([]),
+    attachedFiles = $bindable<AttachedFile[]>([]),
     model = $bindable(''),
     effort = $bindable(''),
     permissionProfile = $bindable(':read-only'),
     models = [],
     permissionProfiles = [],
+    provider = 'codex',
     selectionContext = null,
     skills = [],
     isSending,
@@ -57,11 +66,13 @@
   }: {
     prompt: string;
     attachedImages: AttachedImage[];
+    attachedFiles: AttachedFile[];
     model: string;
     effort: string;
     permissionProfile: string;
-    models?: CodexModelOption[];
-    permissionProfiles?: CodexPermissionProfile[];
+    models?: ModelOption[];
+    permissionProfiles?: PermissionProfile[];
+    provider?: 'codex' | 'claude';
     selectionContext?: SelectionContext | null;
     skills?: Skill[];
     isSending: boolean;
@@ -71,8 +82,28 @@
     onRuntimePreferenceChange?: (model: string, effort: string, permissionProfile: string) => void;
   } = $props();
 
-  let fileInput: HTMLInputElement | null = null;
+  const MAX_UPLOADED_IMAGES = 5;
+  const MAX_UPLOADED_FILES = 5;
+  const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+  const MAX_TOTAL_UPLOAD_BYTES = 20 * 1024 * 1024;
+  const SUPPORTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+  const ALLOWED_FILE_EXTENSIONS = [
+    'txt', 'md', 'markdown', 'pdf', 'rtf',
+    'csv', 'tsv', 'json', 'jsonl', 'yaml', 'yml', 'xml',
+    'html', 'htm', 'css', 'svg',
+    'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'svelte', 'vue',
+    'py', 'rb', 'php', 'java', 'c', 'h', 'cpp', 'hpp', 'cs',
+    'go', 'rs', 'swift', 'kt', 'kts', 'sql',
+    'sh', 'bash', 'zsh', 'fish', 'toml', 'ini', 'cfg', 'conf', 'log', 'lock',
+    'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+  ];
+  const ALLOWED_FILE_EXTENSION_SET = new Set(ALLOWED_FILE_EXTENSIONS);
+  const FILE_ACCEPT = ALLOWED_FILE_EXTENSIONS.map((extension) => `.${extension}`).join(',');
+
+  let imageInput: HTMLInputElement | null = null;
+  let attachmentInput: HTMLInputElement | null = null;
   let textarea: HTMLTextAreaElement | null = null;
+  let attachmentError = $state('');
   let visibleSelectionNodes = $derived(selectionContext?.nodes.slice(0, 3) || []);
 
   function dimensions(node: SelectionContextNode): string {
@@ -196,31 +227,127 @@
     const imageItems = items.filter((i) => i.type.startsWith('image/'));
     if (imageItems.length === 0) return;
     e.preventDefault();
-    imageItems.forEach((item) => {
-      const file = item.getAsFile();
-      if (file) readFile(file);
-    });
+    const files = imageItems.map((item) => item.getAsFile()).filter((file): file is File => Boolean(file));
+    void addUploads(files, 'image');
   }
 
-  function handleFileChange(e: Event) {
+  function handleImageChange(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     if (!input.files) return;
-    Array.from(input.files).forEach(readFile);
+    void addUploads(Array.from(input.files), 'image');
     input.value = '';
   }
 
-  function readFile(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const mediaType = file.type || 'image/png';
-      attachedImages = [...attachedImages, { dataUrl, mediaType, name: file.name }];
-    };
-    reader.readAsDataURL(file);
+  function handleAttachmentChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    if (!input.files) return;
+    void addUploads(Array.from(input.files), 'file');
+    input.value = '';
+  }
+
+  function fileExtension(name: string): string {
+    return name.includes('.') ? name.split('.').pop()?.toLowerCase() || '' : '';
+  }
+
+  function totalUploadBytes(images = attachedImages, files = attachedFiles): number {
+    return images.reduce((total, image) => total + Number(image.size || 0), 0)
+      + files.reduce((total, file) => total + file.size, 0);
+  }
+
+  function fileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === 'string'
+        ? resolve(reader.result)
+        : reject(new Error(`Could not read ${file.name}.`));
+      reader.onerror = () => reject(reader.error || new Error(`Could not read ${file.name}.`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addUploads(files: File[], kind: 'image' | 'file') {
+    let nextImages = [...attachedImages];
+    let nextFiles = [...attachedFiles];
+    let totalBytes = totalUploadBytes(nextImages, nextFiles);
+    const errors: string[] = [];
+
+    for (const file of files) {
+      const isImage = file.type.startsWith('image/');
+      if (kind === 'image' && !isImage) {
+        errors.push(`${file.name} is not an image.`);
+        continue;
+      }
+      if (isImage && !SUPPORTED_IMAGE_TYPES.has(file.type)) {
+        errors.push(`${file.name} must be a PNG, JPEG, or WebP image.`);
+        continue;
+      }
+      if (!isImage && !ALLOWED_FILE_EXTENSION_SET.has(fileExtension(file.name))) {
+        errors.push(`${file.name} is not a supported document or source file.`);
+        continue;
+      }
+      if (isImage && nextImages.length >= MAX_UPLOADED_IMAGES) {
+        errors.push(`You can attach up to ${MAX_UPLOADED_IMAGES} uploaded images.`);
+        continue;
+      }
+      if (!isImage && nextFiles.length >= MAX_UPLOADED_FILES) {
+        errors.push(`You can attach up to ${MAX_UPLOADED_FILES} files.`);
+        continue;
+      }
+      if (file.size === 0) {
+        errors.push(`${file.name} is empty.`);
+        continue;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        errors.push(`${file.name} exceeds the 8 MB limit.`);
+        continue;
+      }
+      if (totalBytes + file.size > MAX_TOTAL_UPLOAD_BYTES) {
+        errors.push('Uploaded images and files exceed the 20 MB combined limit.');
+        continue;
+      }
+      try {
+        const dataUrl = await fileAsDataUrl(file);
+        if (isImage) {
+          nextImages.push({
+            dataUrl,
+            mediaType: file.type || 'image/png',
+            name: file.name,
+            size: file.size,
+            source: 'upload',
+          });
+        } else {
+          nextFiles.push({
+            dataUrl,
+            mediaType: file.type || 'application/octet-stream',
+            name: file.name,
+            size: file.size,
+          });
+        }
+        totalBytes += file.size;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : `Could not read ${file.name}.`);
+      }
+    }
+
+    attachedImages = nextImages;
+    attachedFiles = nextFiles;
+    attachmentError = errors[0] || '';
   }
 
   function removeImage(index: number) {
     attachedImages = attachedImages.filter((_, i) => i !== index);
+    attachmentError = '';
+  }
+
+  function removeFile(index: number) {
+    attachedFiles = attachedFiles.filter((_, i) => i !== index);
+    attachmentError = '';
+  }
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 </script>
 
@@ -323,6 +450,34 @@
       </div>
     {/if}
 
+    {#if attachedFiles.length > 0}
+      <div class="file-strip" aria-label="Attached files">
+        {#each attachedFiles as file, i}
+          <div class="file-chip" title={file.name}>
+            <span class="file-icon"><Icon name="paperclip" size={14} /></span>
+            <span class="file-copy">
+              <span class="file-name">{file.name}</span>
+              <span class="file-meta">{formatBytes(file.size)}</span>
+            </span>
+            <button
+              class="file-remove"
+              type="button"
+              onclick={() => removeFile(i)}
+              title={`Remove ${file.name}`}
+              aria-label={`Remove ${file.name}`}
+              disabled={isSending}
+            >
+              <Icon name="close" size={10} />
+            </button>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if attachmentError}
+      <p class="attachment-error" role="alert">{attachmentError}</p>
+    {/if}
+
     <textarea
       bind:this={textarea}
       bind:value={prompt}
@@ -330,7 +485,7 @@
       oninput={handleInput}
       onpaste={handlePaste}
       rows="3"
-      placeholder="Ask Codex to do something in Figma… (type @ to invoke a skill)"
+      placeholder={`Ask ${provider === 'claude' ? 'Claude' : 'Codex'} to do something in Figma… (type @ to invoke a skill)`}
       disabled={isSending}
     ></textarea>
 
@@ -339,7 +494,7 @@
     <div class="actions-row">
       <div class="left-actions">
         <Button
-          onclick={() => fileInput?.click()}
+          onclick={() => imageInput?.click()}
           disabled={isSending}
           title="Add image"
           variant="outline"
@@ -347,17 +502,34 @@
           <Icon name="image" />
         </Button>
         <input
-          bind:this={fileInput}
+          bind:this={imageInput}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           multiple
           style="display:none"
-          onchange={handleFileChange}
+          onchange={handleImageChange}
+        />
+        <Button
+          onclick={() => attachmentInput?.click()}
+          disabled={isSending}
+          title="Attach file"
+          variant="outline"
+        >
+          <Icon name="paperclip" />
+        </Button>
+        <input
+          bind:this={attachmentInput}
+          type="file"
+          accept={FILE_ACCEPT}
+          multiple
+          style="display:none"
+          onchange={handleAttachmentChange}
         />
         <ModelPicker
           bind:model
           bind:effort
           {models}
+          providerLabel={provider === 'claude' ? 'Claude' : 'Codex'}
           disabled={isSending || models.length === 0}
           onchange={(nextModel, nextEffort) => onRuntimePreferenceChange?.(
             nextModel,
@@ -368,6 +540,7 @@
         <PermissionPicker
           bind:permissionProfile
           profiles={permissionProfiles}
+          providerLabel={provider === 'claude' ? 'Claude Code' : 'Codex CLI'}
           disabled={isSending || permissionProfiles.length === 0}
           onchange={(nextPermissionProfile) => onRuntimePreferenceChange?.(
             model,
@@ -613,7 +786,8 @@
       z-index: 1;
     }
 
-    &:hover .remove-btn {
+    &:hover .remove-btn,
+    &:focus-within .remove-btn {
       opacity: 1;
     }
   }
@@ -624,6 +798,82 @@
     object-fit: cover;
     display: block;
     border-radius: var(--radius-md);
+  }
+
+  .file-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .file-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 36px;
+    padding: 5px 6px 5px 8px;
+    border: 1px solid var(--color-border-1);
+    border-radius: var(--radius-md);
+    background: var(--color-overlay-30);
+  }
+
+  .file-icon {
+    display: inline-flex;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+
+  .file-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .file-name {
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: 11px;
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-meta {
+    color: var(--color-text-tertiary);
+    font-size: 10px;
+  }
+
+  .file-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    flex: 0 0 28px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .file-remove:not(:disabled):hover {
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+  }
+
+  .file-remove:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .attachment-error {
+    color: var(--color-danger);
+    font-size: 11px;
+    line-height: 1.4;
   }
 
   textarea {
@@ -710,5 +960,6 @@
     align-items: center;
     gap: 4px;
     min-width: 0;
+    flex: 1;
   }
 </style>

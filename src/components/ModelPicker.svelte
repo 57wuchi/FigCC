@@ -7,24 +7,27 @@
     description?: string;
   };
 
-  export type CodexModelOption = {
+  export type ModelOption = {
     id: string;
     label: string;
     isDefault?: boolean;
     supportedReasoningEfforts?: ReasoningEffortOption[];
     defaultReasoningEffort?: string;
   };
+  export type CodexModelOption = ModelOption;
 
   let {
     model = $bindable(''),
     effort = $bindable(''),
     models = [],
+    providerLabel = 'Provider',
     disabled = false,
     onchange,
   }: {
     model: string;
     effort: string;
-    models?: CodexModelOption[];
+    models?: ModelOption[];
+    providerLabel?: string;
     disabled?: boolean;
     onchange?: (model: string, effort: string) => void;
   } = $props();
@@ -42,8 +45,8 @@
   const effortOptions = $derived(selectedModel?.supportedReasoningEfforts || []);
   const effectiveEffort = $derived(effort || selectedModel?.defaultReasoningEffort || '');
 
-  function modelLabel(item: CodexModelOption | null, compact = false): string {
-    if (!item) return compact ? 'Codex' : 'Codex default';
+  function modelLabel(item: ModelOption | null, compact = false): string {
+    if (!item) return compact ? providerLabel : `${providerLabel} default`;
     const label = item.label
       .replace(/^GPT-/i, '')
       .replace(/-/g, ' ')
@@ -71,7 +74,7 @@
     view = 'summary';
   }
 
-  function chooseModel(nextModel: CodexModelOption) {
+  function chooseModel(nextModel: ModelOption) {
     model = nextModel.id;
     const supported = new Set((nextModel.supportedReasoningEfforts || []).map((item) => item.id));
     if (effort && !supported.has(effort)) effort = '';
@@ -220,12 +223,15 @@
   .picker {
     position: relative;
     min-width: 0;
+    max-width: 138px;
+    flex: 1 1 88px;
   }
 
   .trigger {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    width: 100%;
     max-width: 138px;
     height: var(--height-btn);
     padding: 0 7px;

@@ -7,9 +7,15 @@
 
   let {
     activeTab = $bindable<Tab>('chat'),
+    provider,
+    isSending = false,
+    onProviderChange,
     onClear,
   }: {
     activeTab: Tab;
+    provider: 'codex' | 'claude';
+    isSending?: boolean;
+    onProviderChange: (provider: 'codex' | 'claude') => void;
     onClear: () => void;
   } = $props();
 </script>
@@ -22,9 +28,27 @@
       </span>
       <span class="brand-name">FigCodex</span>
     </div>
-    {#if activeTab === 'chat'}
-      <Button onclick={onClear} variant="ghost" title="New chat"><Icon name="plus" /></Button>
-    {/if}
+    <div class="header-actions">
+      <div class="provider-switch" role="group" aria-label="Chat provider">
+        <button
+          type="button"
+          class:active={provider === 'codex'}
+          aria-pressed={provider === 'codex'}
+          disabled={isSending}
+          onclick={() => onProviderChange('codex')}
+        >Codex</button>
+        <button
+          type="button"
+          class:active={provider === 'claude'}
+          aria-pressed={provider === 'claude'}
+          disabled={isSending}
+          onclick={() => onProviderChange('claude')}
+        >Claude</button>
+      </div>
+      {#if activeTab === 'chat'}
+        <Button onclick={onClear} variant="ghost" title="New chat" disabled={isSending}><Icon name="plus" /></Button>
+      {/if}
+    </div>
   </div>
   <nav class="tabs-shell" aria-label="FigCodex sections">
     <button class="tab-btn" class:active={activeTab === 'chat'} aria-current={activeTab === 'chat' ? 'page' : undefined} onclick={() => (activeTab = 'chat')}>Chat</button>
@@ -82,6 +106,42 @@
     font-size: 14px;
     font-weight: 650;
     letter-spacing: -0.01em;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .provider-switch {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--color-border-1);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-1);
+  }
+
+  .provider-switch button {
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-tertiary);
+    font-size: 10px;
+    font-weight: 590;
+    cursor: pointer;
+  }
+
+  .provider-switch button.active {
+    background: var(--color-surface-3);
+    color: var(--color-text-primary);
+  }
+
+  .provider-switch button:disabled {
+    cursor: default;
+    opacity: 0.55;
   }
 
   .tabs-shell {

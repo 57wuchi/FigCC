@@ -2,20 +2,23 @@
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
 
-  export type CodexPermissionProfile = {
+  export type PermissionProfile = {
     id: string;
     description?: string;
     allowed?: boolean;
   };
+  export type CodexPermissionProfile = PermissionProfile;
 
   let {
     permissionProfile = $bindable(':read-only'),
     profiles = [],
+    providerLabel = 'provider',
     disabled = false,
     onchange,
   }: {
     permissionProfile: string;
-    profiles?: CodexPermissionProfile[];
+    profiles?: PermissionProfile[];
+    providerLabel?: string;
     disabled?: boolean;
     onchange?: (permissionProfile: string) => void;
   } = $props();
@@ -33,22 +36,24 @@
     const labels: Record<string, string> = {
       ':read-only': compact ? 'Read only' : 'Read only',
       ':workspace': compact ? 'Workspace' : 'Workspace access',
+      ':auto': compact ? 'Auto' : 'Automatic review',
       ':danger-full-access': compact ? 'Full access' : 'Full access',
     };
     return labels[id] || id.replace(/^:/, '').replace(/-/g, ' ') || 'Read only';
   }
 
-  function profileDescription(profile: CodexPermissionProfile): string {
+  function profileDescription(profile: PermissionProfile): string {
     if (profile.description) return profile.description;
     const descriptions: Record<string, string> = {
       ':read-only': 'Inspect project files. Local writes require automatic review.',
       ':workspace': 'Read and write files inside this project without another review.',
+      ':auto': 'Let the selected provider classify local permission prompts automatically.',
       ':danger-full-access': 'No filesystem sandbox. Use only for a task you trust.',
     };
-    return descriptions[profile.id] || 'Permission profile provided by the local Codex CLI.';
+    return descriptions[profile.id] || `Permission profile provided by the local ${providerLabel} runtime.`;
   }
 
-  function choose(profile: CodexPermissionProfile) {
+  function choose(profile: PermissionProfile) {
     permissionProfile = profile.id;
     onchange?.(permissionProfile);
     open = false;
@@ -130,12 +135,15 @@
   .picker {
     position: relative;
     min-width: 0;
+    max-width: 88px;
+    flex: 0 1 76px;
   }
 
   .trigger {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    width: 100%;
     max-width: 88px;
     height: var(--height-btn);
     padding: 0 7px;

@@ -8,11 +8,12 @@
   import Skills, { type Skill } from './components/Skills.svelte';
   import ChatMessage from './components/ChatMessage.svelte';
   import Composer, {
+    type AttachedFile,
     type AttachedImage,
     type SelectionContext,
   } from './components/Composer.svelte';
-  import type { CodexModelOption } from './components/ModelPicker.svelte';
-  import type { CodexPermissionProfile } from './components/PermissionPicker.svelte';
+  import type { ModelOption } from './components/ModelPicker.svelte';
+  import type { PermissionProfile } from './components/PermissionPicker.svelte';
   import EmptyChat from './components/EmptyChat.svelte';
   import { TOOLS } from './tools';
   import SYSTEM_PROMPT from './system-prompt.md?raw';
@@ -29,10 +30,30 @@
     content: string | ContentBlock[];
   };
 
+  type Provider = 'codex' | 'claude';
+
+  type RuntimePreferences = {
+    model: string;
+    effort: string;
+    permissionProfile: string;
+  };
+
+  type ProviderCatalog = {
+    id: Provider;
+    label: string;
+    available: boolean;
+    cliVersion?: string;
+    auth?: string;
+    error?: string;
+    models: ModelOption[];
+    permissionProfiles: PermissionProfile[];
+  };
+
   type DisplayMessage = {
     role: 'user' | 'assistant' | 'tool' | 'code';
     text: string;
     images?: string[]; // data URLs for user messages
+    files?: Array<{ name: string; mediaType: string; size: number }>;
     toolName?: string;
     toolStatus?: 'running' | 'done' | 'error';
     toolRequestId?: string;
@@ -46,7 +67,8 @@
     displayMessages: DisplayMessage[];
     apiHistory?: ApiMessage[];
     threadId?: string | null;
-    provider?: 'codex' | 'claude';
+    sessionId?: string | null;
+    provider?: Provider;
     policyVersion?: string;
   };
 
@@ -57,8 +79,11 @@
     isBinary?: boolean;
   };
 
-  const THREAD_POLICY_VERSION = 'auto-review-v1';
-  const MAX_CODEX_IMAGES = 5;
+  const CODEX_THREAD_POLICY_VERSION = 'auto-review-v1';
+  const CLAUDE_SESSION_POLICY_VERSION = 'claude-agent-sdk-v1';
+  const MAX_PROVIDER_IMAGES = 5;
+  const MAX_PROVIDER_FILES = 5;
+  const MAX_PROVIDER_ATTACHMENT_BYTES = 26 * 1024 * 1024;
 
   // ─── Helpers (defined early so $state initializers can use them) ──────────
   function makeId(): string {
@@ -68,19 +93,41 @@
     });
   }
 
+  function dataUrlByteLength(dataUrl: string): number {
+    const encoded = String(dataUrl || '').split(',', 2)[1] || '';
+    if (!encoded) return 0;
+    const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
+    return Math.max(0, Math.floor((encoded.length * 3) / 4) - padding);
+  }
+
+  function providerLabel(value: Provider = provider): string {
+    return value === 'claude' ? 'Claude' : 'Codex';
+  }
+
+  function policyVersionFor(value: Provider): string {
+    return value === 'claude' ? CLAUDE_SESSION_POLICY_VERSION : CODEX_THREAD_POLICY_VERSION;
+  }
+
   // ─── State ────────────────────────────────────────────────────────────────
   let statusMessage = $state('');
   let bridgeUrl = $state('http://localhost:4319');
   let bridgeToken = $state('');
   let bridgeStatus = $state<'disconnected' | 'connecting' | 'ready' | 'error'>('disconnected');
   let bridgeDetail = $state('');
-  let codexModels = $state<CodexModelOption[]>([]);
-  let codexPermissionProfiles = $state<CodexPermissionProfile[]>([]);
+  let provider = $state<Provider>('codex');
+  let providerCatalogs = $state<Partial<Record<Provider, ProviderCatalog>>>({});
+  let runtimePreferences = $state<Record<Provider, RuntimePreferences>>({
+    codex: { model: '', effort: '', permissionProfile: ':read-only' },
+    claude: { model: '', effort: '', permissionProfile: ':read-only' },
+  });
+  let providerModels = $derived(providerCatalogs[provider]?.models || []);
+  let providerPermissionProfiles = $derived(providerCatalogs[provider]?.permissionProfiles || []);
   let model = $state('');
   let effort = $state('');
   let permissionProfile = $state(':read-only');
   let prompt = $state('');
   let attachedImages = $state<AttachedImage[]>([]);
+  let attachedFiles = $state<AttachedFile[]>([]);
   let selectionContext = $state<SelectionContext | null>(null);
   let selectionExcluded = $state(false);
   let activeSelectionContext = $derived(
@@ -101,20 +148,22 @@
     if (bridgeSocket?.readyState === WebSocket.OPEN && currentThreadId && currentTurnId) {
       bridgeSocket.send(JSON.stringify({
         type: 'turn.interrupt',
+        provider,
         threadId: currentThreadId,
         turnId: currentTurnId,
       }));
-      statusMessage = 'Stopping Codex…';
+      statusMessage = `Stopping ${providerLabel()}…`;
     }
   }
   let activeTab = $state<Tab>('chat');
 
   let skills = $state<Skill[]>([]);
+  let legacySkillsPending: Skill[] = [];
 
   function normalizeSkills(input: Skill[]): Skill[] {
     return input.map((skill) => ({
       ...skill,
-      mode: skill.mode === 'passive' ? 'passive' : 'active',
+      mode: skill.mode === 'active' ? 'active' : 'passive',
     }));
   }
 
@@ -392,7 +441,7 @@
     );
   }
 
-  // ─── Local Codex bridge ───────────────────────────────────────────────────
+  // ─── Local provider bridge ────────────────────────────────────────────────
   function socketUrl(): string {
     const url = new URL(bridgeUrl.trim() || 'http://localhost:4319');
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -404,7 +453,7 @@
 
   function sendBridge(message: Record<string, unknown>) {
     if (!bridgeSocket || bridgeSocket.readyState !== WebSocket.OPEN || bridgeStatus !== 'ready') {
-      throw new Error('Codex bridge is not connected.');
+      throw new Error('FigCodex bridge is not connected.');
     }
     bridgeSocket.send(JSON.stringify(message));
   }
@@ -459,7 +508,7 @@
         if (bridgeStatus !== 'error') bridgeStatus = 'disconnected';
         if (isSending) {
           isSending = false;
-          statusMessage = 'Bridge disconnected. Your Codex thread is preserved.';
+          statusMessage = `Bridge disconnected. Your ${providerLabel()} chat is preserved.`;
         }
         reconnectTimer = setTimeout(connectBridge, 3_000);
       };
@@ -472,7 +521,7 @@
   function saveBridgeSettings() {
     sendToPlugin({
       type: 'save-settings',
-      settings: { bridgeUrl, bridgeToken, model, effort, permissionProfile },
+      settings: { bridgeUrl, bridgeToken, provider, runtimes: runtimePreferences },
     });
   }
 
@@ -481,8 +530,17 @@
     nextEffort: string,
     nextPermissionProfile: string
   ) {
+    runtimePreferences = {
+      ...runtimePreferences,
+      [provider]: {
+        model: nextModel,
+        effort: nextEffort,
+        permissionProfile: nextPermissionProfile,
+      },
+    };
     sendToPlugin({
       type: 'save-runtime-preferences',
+      provider,
       model: nextModel,
       effort: nextEffort,
       permissionProfile: nextPermissionProfile,
@@ -497,15 +555,6 @@
       return 'The user selected Full access. There is no filesystem sandbox, but you must still use shell or filesystem tools only for explicit project-file requests and keep every change narrowly scoped.';
     }
     return 'The user selected Read only. Explicit project-file writes must request the narrowest necessary filesystem escalation and are subject to automatic permission review.';
-  }
-
-  function fallbackContext(): string {
-    return displayMessages
-      .filter((message) => message.role === 'user' || message.role === 'assistant')
-      .slice(-24)
-      .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.text}`)
-      .join('\n\n')
-      .slice(-30_000);
   }
 
   function cloneSelectionContext(context: SelectionContext): SelectionContext {
@@ -628,41 +677,100 @@
     scrollBottom();
   }
 
+  function selectRuntimeForProvider(nextProvider: Provider, shouldPersist = false) {
+    const catalog = providerCatalogs[nextProvider];
+    const saved = runtimePreferences[nextProvider];
+    const selectedModel = catalog?.models.find((item) => item.id === saved.model)
+      || catalog?.models.find((item) => item.isDefault)
+      || catalog?.models[0];
+    const nextModel = selectedModel?.id || '';
+    const supportedEfforts = new Set(
+      (selectedModel?.supportedReasoningEfforts || []).map((item) => item.id)
+    );
+    const nextEffort = saved.effort && supportedEfforts.has(saved.effort) ? saved.effort : '';
+    const selectedPermission = catalog?.permissionProfiles.find(
+      (item) => item.id === saved.permissionProfile
+    ) || catalog?.permissionProfiles.find((item) => item.id === ':read-only')
+      || catalog?.permissionProfiles[0];
+    const nextPermissionProfile = selectedPermission?.id || ':read-only';
+    runtimePreferences = {
+      ...runtimePreferences,
+      [nextProvider]: {
+        model: nextModel,
+        effort: nextEffort,
+        permissionProfile: nextPermissionProfile,
+      },
+    };
+    if (nextProvider === provider) {
+      model = nextModel;
+      effort = nextEffort;
+      permissionProfile = nextPermissionProfile;
+      if (shouldPersist) persistRuntimePreferences(model, effort, permissionProfile);
+    }
+  }
+
   async function handleBridgeMessage(message: Record<string, unknown>) {
     const type = String(message.type || '');
     if (type === 'bridge.ready') {
       bridgeStatus = 'ready';
-      codexModels = Array.isArray(message.models)
-        ? (message.models as CodexModelOption[]).filter((item) => item && item.id)
-        : [];
-      codexPermissionProfiles = Array.isArray(message.permissionProfiles)
-        ? (message.permissionProfiles as CodexPermissionProfile[]).filter((item) => item && item.id)
-        : [];
-      const selectedModel = codexModels.find((item) => item.id === model)
-        || codexModels.find((item) => item.isDefault)
-        || codexModels[0];
-      const nextModel = selectedModel?.id || '';
-      const supportedEfforts = new Set(
-        (selectedModel?.supportedReasoningEfforts || []).map((item) => item.id)
-      );
-      const nextEffort = effort && supportedEfforts.has(effort) ? effort : '';
-      const selectedPermissionProfile = codexPermissionProfiles.find(
-        (item) => item.id === permissionProfile
-      ) || codexPermissionProfiles.find((item) => item.id === ':read-only')
-        || codexPermissionProfiles[0];
-      const nextPermissionProfile = selectedPermissionProfile?.id || ':read-only';
-      if (
-        model !== nextModel
-        || effort !== nextEffort
-        || permissionProfile !== nextPermissionProfile
-      ) {
-        model = nextModel;
-        effort = nextEffort;
-        permissionProfile = nextPermissionProfile;
-        persistRuntimePreferences(model, effort, permissionProfile);
+      const rawProviders = message.providers && typeof message.providers === 'object'
+        ? message.providers as Record<string, unknown>
+        : {};
+      const nextCatalogs: Partial<Record<Provider, ProviderCatalog>> = {};
+      for (const id of ['codex', 'claude'] as Provider[]) {
+        const raw = rawProviders[id] && typeof rawProviders[id] === 'object'
+          ? rawProviders[id] as Record<string, unknown>
+          : id === 'codex'
+            ? message
+            : {};
+        nextCatalogs[id] = {
+          id,
+          label: id === 'claude' ? 'Claude' : 'Codex',
+          available: raw.available !== false && (id !== 'codex' || raw.appServerReady !== false),
+          cliVersion: String(raw.cliVersion || ''),
+          auth: String(raw.auth || ''),
+          error: String(raw.error || ''),
+          models: Array.isArray(raw.models)
+            ? (raw.models as ModelOption[]).filter((item) => item && item.id)
+            : [],
+          permissionProfiles: Array.isArray(raw.permissionProfiles)
+            ? (raw.permissionProfiles as PermissionProfile[]).filter((item) => item && item.id)
+            : [],
+        };
       }
-      bridgeDetail = `Codex CLI ${String(message.cliVersion || '')} · ${String(message.auth || 'Logged in')}`;
-      statusMessage = 'Codex is ready ✨';
+      providerCatalogs = nextCatalogs;
+      selectRuntimeForProvider('codex');
+      selectRuntimeForProvider('claude');
+      const activeCatalog = providerCatalogs[provider];
+      bridgeDetail = activeCatalog?.available
+        ? `${providerLabel()} ${activeCatalog.cliVersion || ''} · ${activeCatalog.auth || 'Ready'}`
+        : `${providerLabel()} unavailable: ${activeCatalog?.error || 'Local CLI is not ready.'}`;
+      statusMessage = activeCatalog?.available
+        ? `${providerLabel()} is ready ✨`
+        : `${providerLabel()} is not available.`;
+      if (legacySkillsPending.length > 0) {
+        sendBridge({
+          type: 'skills.import',
+          skills: JSON.parse(JSON.stringify(legacySkillsPending)),
+        });
+        legacySkillsPending = [];
+      }
+      return;
+    }
+    if (type === 'skills.list') {
+      if (Array.isArray(message.skills)) skills = normalizeSkills(message.skills as Skill[]);
+      return;
+    }
+    if (type === 'skills.error') {
+      statusMessage = `Skill update failed: ${String(message.error || 'Unknown error')}`;
+      return;
+    }
+    if (type === 'provider.error') {
+      const failedProvider = String(message.provider || '') as Provider;
+      if (failedProvider === provider) {
+        statusMessage = `${providerLabel()} error: ${String(message.error || 'Provider stopped.')}`;
+        isSending = false;
+      }
       return;
     }
     if (type === 'auth.error' || type === 'bridge.error') {
@@ -675,7 +783,7 @@
     if (type === 'turn.accepted' || type === 'turn.started') {
       if (message.threadId) currentThreadId = String(message.threadId);
       if (message.turnId) currentTurnId = String(message.turnId);
-      statusMessage = 'Codex is working…';
+      statusMessage = `${providerLabel()} is working…`;
       return;
     }
     if (type === 'agent.delta') {
@@ -722,7 +830,7 @@
     if (type === 'turn.completed') {
       const turnStatus = String(message.status || 'completed');
       if (turnStatus === 'failed') {
-        const error = String(message.error || 'Codex turn failed.');
+        const error = String(message.error || `${providerLabel()} turn failed.`);
         pushDisplay({ role: 'assistant', text: `Error: ${error}` });
         statusMessage = `Error: ${error}`;
       } else {
@@ -735,40 +843,57 @@
     }
   }
 
-  async function runCodexTurn(
+  async function runProviderTurn(
     userText: string,
     images: AttachedImage[] = [],
+    files: AttachedFile[] = [],
     displayText?: string,
     figmaSelection?: string
   ) {
     if (bridgeStatus !== 'ready') {
       activeTab = 'settings';
-      statusMessage = 'Connect the local Codex bridge first.';
+      statusMessage = 'Connect the local FigCodex bridge first.';
       return;
     }
-    const importedContext = currentThreadId ? '' : fallbackContext();
+    const catalog = providerCatalogs[provider];
+    if (!catalog?.available) {
+      activeTab = 'settings';
+      statusMessage = `${providerLabel()} is unavailable: ${catalog?.error || 'check the local CLI installation and login.'}`;
+      return;
+    }
     pushDisplay({
       role: 'user',
       text: displayText ?? userText,
       images: images.map((image) => image.dataUrl),
+      files: files.map((file) => ({
+        name: file.name,
+        mediaType: file.mediaType,
+        size: file.size,
+      })),
       ...(figmaSelection ? { figmaSelection } : {}),
     });
     isSending = true;
-    statusMessage = 'Starting Codex…';
+    statusMessage = `Starting ${providerLabel()}…`;
     try {
       sendBridge({
         type: 'turn.start',
+        provider,
         requestId: makeId(),
         chatId: currentChatId,
         threadId: currentThreadId,
         prompt: userText,
-        fallbackContext: importedContext,
-        instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCodex dynamic tools for all Figma inspection and canvas changes. Canvas tool calls execute directly and are not filesystem permission requests. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use Codex filesystem or shell tools. ${filesystemBoundary()}`,
+        instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCodex tools for all Figma inspection and canvas changes. Canvas tool calls execute directly and are not filesystem permission requests. Reading the exact local paths listed in <attached_files> is part of the user's input and is allowed; never modify those attachment files. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use ${providerLabel()} filesystem or shell tools. ${filesystemBoundary()}`,
         tools: TOOLS,
         model,
         effort,
         permissionProfile,
         images: images.map((image) => ({ dataUrl: image.dataUrl, mediaType: image.mediaType })),
+        files: files.map((file) => ({
+          dataUrl: file.dataUrl,
+          mediaType: file.mediaType,
+          name: file.name,
+          size: file.size,
+        })),
       });
     } catch (error) {
       isSending = false;
@@ -801,9 +926,10 @@
     if (isSending) return;
     const rawText = prompt.trim();
     const uploadedImages = attachedImages.slice();
+    const uploadedFiles = attachedFiles.slice(0, MAX_PROVIDER_FILES);
     if (bridgeStatus !== 'ready') {
       activeTab = 'settings';
-      statusMessage = 'Connect the local Codex bridge first.';
+      statusMessage = 'Connect the local FigCodex bridge first.';
       return;
     }
     isSending = true;
@@ -812,16 +938,36 @@
     const selectionSnapshot = freshSelection && freshSelection.nodes.length > 0
       ? cloneSelectionContext(freshSelection)
       : null;
-    if (!rawText && uploadedImages.length === 0 && !selectionSnapshot) {
+    if (!rawText && uploadedImages.length === 0 && uploadedFiles.length === 0 && !selectionSnapshot) {
       isSending = false;
       statusMessage = '';
       return;
     }
-    prompt = '';
-    attachedImages = [];
 
     const selectedImages = selectionSnapshot ? selectionImages(selectionSnapshot) : [];
-    const images = [...uploadedImages, ...selectedImages].slice(0, MAX_CODEX_IMAGES);
+    const images: AttachedImage[] = [];
+    let attachmentBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
+    for (const image of uploadedImages) {
+      const bytes = image.size || dataUrlByteLength(image.dataUrl);
+      if (images.length >= MAX_PROVIDER_IMAGES || attachmentBytes + bytes > MAX_PROVIDER_ATTACHMENT_BYTES) {
+        isSending = false;
+        statusMessage = 'Uploaded attachments exceed the message size limit.';
+        return;
+      }
+      images.push(image);
+      attachmentBytes += bytes;
+    }
+    for (const image of selectedImages) {
+      const bytes = dataUrlByteLength(image.dataUrl);
+      if (images.length >= MAX_PROVIDER_IMAGES || attachmentBytes + bytes > MAX_PROVIDER_ATTACHMENT_BYTES) {
+        continue;
+      }
+      images.push(image);
+      attachmentBytes += bytes;
+    }
+    prompt = '';
+    attachedImages = [];
+    attachedFiles = [];
     const attachedNodeIds = new Set(
       images
         .filter((image) => image.source === 'figma-selection' && image.nodeId)
@@ -831,7 +977,11 @@
     const { resolvedText, injected } = resolveSkillMentions(rawText);
     const taskText = resolvedText || (selectionSnapshot
       ? 'Inspect this Figma selection and briefly describe what is present.'
-      : 'Inspect the attached image and briefly describe what is present.');
+      : uploadedFiles.length > 0 && images.length > 0
+        ? 'Inspect the attached files and images and briefly describe what is present.'
+        : uploadedFiles.length > 0
+          ? 'Inspect the attached files and briefly describe what is present.'
+          : 'Inspect the attached image and briefly describe what is present.');
     const sections: string[] = [];
     if (injected.length > 0) {
       const skillBlock = injected
@@ -843,9 +993,10 @@
     sections.push(taskText);
     const finalText = sections.join('\n\n').trim();
 
-    await runCodexTurn(
+    await runProviderTurn(
       finalText,
       images,
+      uploadedFiles,
       rawText || taskText,
       selectionSnapshot ? selectionDisplayLabel(selectionSnapshot) : undefined
     );
@@ -869,9 +1020,11 @@
       savedAt: Date.now(),
       displayMessages: [...displayMessages],
       apiHistory: apiHistory.length > 0 ? [...apiHistory] : undefined,
-      threadId: currentThreadId,
-      provider: 'codex',
-      policyVersion: THREAD_POLICY_VERSION,
+      ...(provider === 'codex'
+        ? { threadId: currentThreadId }
+        : { sessionId: currentThreadId }),
+      provider,
+      policyVersion: policyVersionFor(provider),
     };
     const exists = savedChats.some((c) => c.id === currentChatId);
     const updated = exists
@@ -881,9 +1034,7 @@
     persistHistory(updated);
   }
 
-  function clearChat() {
-    // Don't save an empty chat
-    if (displayMessages.length > 0) upsertCurrentChat();
+  function resetChatState() {
     displayMessages = [];
     apiHistory = [];
     currentThreadId = null;
@@ -893,11 +1044,35 @@
     tick().then(() => composer?.focusTextarea());
   }
 
+  function clearChat() {
+    if (displayMessages.length > 0) upsertCurrentChat();
+    resetChatState();
+  }
+
+  function switchProvider(nextProvider: Provider) {
+    if (nextProvider === provider || isSending) return;
+    if (displayMessages.length > 0) upsertCurrentChat();
+    provider = nextProvider;
+    selectRuntimeForProvider(provider, true);
+    resetChatState();
+    const catalog = providerCatalogs[provider];
+    statusMessage = catalog?.available
+      ? `New ${providerLabel()} chat.`
+      : `${providerLabel()} is unavailable. Open Settings for details.`;
+    activeTab = 'chat';
+  }
+
   function resumeChat(chat: SavedChat) {
     if (displayMessages.length > 0) upsertCurrentChat();
+    provider = chat.provider === 'claude' ? 'claude' : 'codex';
+    selectRuntimeForProvider(provider);
     displayMessages = [...chat.displayMessages];
     apiHistory = [...(chat.apiHistory || [])];
-    currentThreadId = chat.policyVersion === THREAD_POLICY_VERSION ? chat.threadId || null : null;
+    currentThreadId = chat.policyVersion === policyVersionFor(provider)
+      ? provider === 'claude'
+        ? chat.sessionId || null
+        : chat.threadId || null
+      : null;
     currentTurnId = null;
     streamMessageIndexes.clear();
     currentChatId = chat.id;
@@ -913,33 +1088,30 @@
   }
 
   // ─── Skills ───────────────────────────────────────────────────────────────
-  function persistSkills(updated: Skill[]) {
-    // Svelte rune state can contain proxy-wrapped objects that are not postMessage-cloneable.
-    // Force plain JSON-serializable data before crossing iframe boundary.
-    const serializableSkills = JSON.parse(JSON.stringify(updated)) as Skill[];
-    sendToPlugin({ type: 'save-skills', skills: serializableSkills });
+  function sendSkillMessage(message: Record<string, unknown>) {
+    try {
+      sendBridge(message);
+    } catch (error) {
+      statusMessage = `Skill update failed: ${error instanceof Error ? error.message : String(error)}`;
+      activeTab = 'settings';
+    }
   }
 
   function addSkill(skill: Skill) {
-    skills = [...skills, skill];
-    persistSkills(skills);
+    sendSkillMessage({ type: 'skills.create', skill: JSON.parse(JSON.stringify(skill)) });
   }
 
   function removeSkill(id: string) {
-    skills = skills.filter((s) => s.id !== id);
-    persistSkills(skills);
+    sendSkillMessage({ type: 'skills.remove', id });
   }
 
   function toggleSkillMode(id: string) {
-    skills = skills.map((s) =>
-      s.id === id ? { ...s, mode: s.mode === 'active' ? 'passive' : 'active' } : s
-    );
-    persistSkills(skills);
-  }
-
-  function updateSkill(id: string, updates: Partial<Skill>) {
-    skills = skills.map((s) => (s.id === id ? { ...s, ...updates } : s));
-    persistSkills(skills);
+    const skill = skills.find((item) => item.id === id);
+    sendSkillMessage({
+      type: 'skills.mode',
+      id,
+      mode: skill?.mode === 'passive' ? 'active' : 'passive',
+    });
   }
 
   // ─── Plugin message handler ───────────────────────────────────────────────
@@ -951,20 +1123,45 @@
       if (msg.settings && typeof msg.settings === 'object') {
         bridgeUrl = String(msg.settings.bridgeUrl || 'http://localhost:4319');
         bridgeToken = String(msg.settings.bridgeToken || '');
-        model = String(msg.settings.model || '');
-        effort = String(msg.settings.effort || '');
-        permissionProfile = String(msg.settings.permissionProfile || ':read-only');
+        provider = msg.settings.provider === 'claude' ? 'claude' : 'codex';
+        const rawRuntimes = msg.settings.runtimes && typeof msg.settings.runtimes === 'object'
+          ? msg.settings.runtimes as Record<string, Record<string, unknown>>
+          : {};
+        runtimePreferences = {
+          codex: {
+            model: String(rawRuntimes.codex?.model || msg.settings.model || ''),
+            effort: String(rawRuntimes.codex?.effort || msg.settings.effort || ''),
+            permissionProfile: String(rawRuntimes.codex?.permissionProfile || msg.settings.permissionProfile || ':read-only'),
+          },
+          claude: {
+            model: String(rawRuntimes.claude?.model || ''),
+            effort: String(rawRuntimes.claude?.effort || ''),
+            permissionProfile: String(rawRuntimes.claude?.permissionProfile || ':read-only'),
+          },
+        };
+        model = runtimePreferences[provider].model;
+        effort = runtimePreferences[provider].effort;
+        permissionProfile = runtimePreferences[provider].permissionProfile;
       }
       if (Array.isArray(msg.skills)) {
-        skills = normalizeSkills(msg.skills as Skill[]);
+        legacySkillsPending = normalizeSkills(msg.skills as Skill[]);
+        skills = legacySkillsPending;
       }
       if (Array.isArray(msg.chatHistory) && msg.chatHistory.length > 0) {
         const chats = msg.chatHistory as SavedChat[];
         const latest = chats[0];
         savedChats = chats;
+        provider = latest.provider === 'claude' ? 'claude' : 'codex';
+        model = runtimePreferences[provider].model;
+        effort = runtimePreferences[provider].effort;
+        permissionProfile = runtimePreferences[provider].permissionProfile;
         displayMessages = [...latest.displayMessages];
         apiHistory = [...(latest.apiHistory || [])];
-        currentThreadId = latest.policyVersion === THREAD_POLICY_VERSION ? latest.threadId || null : null;
+        currentThreadId = latest.policyVersion === policyVersionFor(provider)
+          ? provider === 'claude'
+            ? latest.sessionId || null
+            : latest.threadId || null
+          : null;
         currentChatId = latest.id;
       }
       connectBridge();
@@ -975,9 +1172,6 @@
       if (msg.settings && typeof msg.settings === 'object') {
         bridgeUrl = String(msg.settings.bridgeUrl || bridgeUrl);
         bridgeToken = String(msg.settings.bridgeToken || bridgeToken);
-        model = String(msg.settings.model || model);
-        effort = String(msg.settings.effort || effort);
-        permissionProfile = String(msg.settings.permissionProfile || permissionProfile);
       }
       statusMessage = 'Settings saved.';
       connectBridge();
@@ -1059,7 +1253,13 @@
 </script>
 
 <main class="plugin" class:auto-height={activeTab !== 'chat'} bind:this={mainEl}>
-  <Header bind:activeTab onClear={clearChat} />
+  <Header
+    bind:activeTab
+    {provider}
+    {isSending}
+    onProviderChange={switchProvider}
+    onClear={clearChat}
+  />
 
   {#if activeTab === 'settings'}
     <Settings
@@ -1067,6 +1267,8 @@
       bind:bridgeToken
       connectionStatus={bridgeStatus}
       connectionDetail={bridgeDetail}
+      {provider}
+      providers={providerCatalogs}
       onSave={saveBridgeSettings}
       onReconnect={connectBridge}
     />
@@ -1093,7 +1295,7 @@
           <EmptyChat />
         {:else}
           {#each displayMessages as msg}
-            <ChatMessage {msg} />
+            <ChatMessage {msg} {provider} />
           {/each}
           {#if isSending}
             <div class="thinking">
@@ -1113,11 +1315,13 @@
         bind:this={composer}
         bind:prompt
         bind:attachedImages
+        bind:attachedFiles
         bind:model
         bind:effort
         bind:permissionProfile
-        models={codexModels}
-        permissionProfiles={codexPermissionProfiles}
+        {provider}
+        models={providerModels}
+        permissionProfiles={providerPermissionProfiles}
         selectionContext={activeSelectionContext}
         skills={allSkills.filter((s) => !s.isDefault && s.mode === 'passive')}
         {isSending}
