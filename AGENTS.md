@@ -1,12 +1,12 @@
 # AGENTS.md
 
-This file contains repository-wide instructions for coding agents working on FigCodex.
+This file contains repository-wide instructions for coding agents working on FigCC.
 
 ## Project identity
 
-- Product name: **FigCodex**.
-- Package/service identifiers: `figcodex`, `FIGCODEX_*`, and `com.figcodex.bridge`.
-- FigCodex is a derivative of [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw), used under the MIT License.
+- Product name: **FigCC**.
+- Compatibility package/service identifiers remain `figcodex`, `FIGCODEX_*`, and `com.figcodex.bridge`.
+- FigCC is a derivative of [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw), used under the MIT License.
 - Preserve [LICENSE](LICENSE), [NOTICE.md](NOTICE.md), the upstream copyright line, and the explicit FigClaw attribution in both READMEs.
 - This is an independent community project. Do not imply official affiliation with Figma, Anthropic, or OpenAI.
 
@@ -23,8 +23,8 @@ Figma plugin sandbox → open Figma document
 - `src/code.ts` owns Figma APIs, client storage, selection snapshots, downloads, and tool execution.
 - `bridge/server.js` owns pairing authentication, provider dispatch, Codex threads, Claude sessions, attachments, skills, and tool routing.
 - `bridge/codex-app-server.js` is the JSON-RPC stdio adapter.
-- `bridge/claude-provider.js` is the Claude Code Agent SDK adapter and in-process FigCodex MCP server.
-- `bridge/dynamic-tool-reviewer.js` performs the independent fail-closed review for side-effecting FigCodex tools.
+- `bridge/claude-provider.js` is the Claude Code Agent SDK adapter and in-process FigCC MCP server.
+- `bridge/dynamic-tool-reviewer.js` performs the independent fail-closed review for side-effecting FigCC tools.
 - `bridge/skill-store.js` owns canonical filesystem skill packages under `skills/<name>/SKILL.md`.
 - `src/tools.ts` is the dynamic-tool schema source of truth.
 - Do not replace the App Server flow with one `codex exec` subprocess per prompt; that breaks the in-turn client tool handshake and native thread resume.
@@ -37,7 +37,7 @@ Do not weaken these without an explicit, security-reviewed request:
 - The bridge binds to loopback by default and requires the pairing token.
 - Pairing tokens, Codex/Claude credentials, `.figcodex-data/`, and `.figclaw-data/` must never enter git, prompts, UI diagnostics, or public logs.
 - Codex defaults to the live `:read-only` permission profile with `approvalPolicy: on-request`, `approvalsReviewer: auto_review`, and this project as its narrow runtime root. Workspace and full-access profiles remain explicit user choices.
-- Claude defaults to the locked `:read-only` profile, uses the local Claude Code login through the official Agent SDK, and never asks FigCodex for an Anthropic API key. Workspace, Auto, and Full access remain explicit choices.
+- Claude defaults to the locked `:read-only` profile, uses the local Claude Code login through the official Agent SDK, and never asks FigCC for an Anthropic API key. Workspace, Auto, and Full access remain explicit choices.
 - Figma canvas inspection and mutations run directly through the plugin sandbox. Skill writes, downloads, and local project-file escalations retain their applicable review boundary.
 - Bridge-side review for actions that still require it fails closed. A parse error, timeout, unavailable reviewer, or uncertain decision is not approval.
 - Keep compatible user-configured MCP servers disabled for the dedicated canvas agent unless a deliberate architecture change is approved and tested.
@@ -48,7 +48,7 @@ Do not weaken these without an explicit, security-reviewed request:
 
 ## Compatibility and storage
 
-- New names use FigCodex identifiers.
+- New visible product copy uses FigCC. Existing `figcodex` technical identifiers remain stable for compatibility.
 - Legacy FigClaw storage keys, `.figclaw-data`, pairing tokens, and environment variables are read only as migration fallbacks.
 - Do not remove a migration fallback without documenting the breaking change.
 - Preserve Codex thread IDs, Claude session IDs, each provider's policy version, and provider ownership when changing chat history.
@@ -65,7 +65,7 @@ Do not weaken these without an explicit, security-reviewed request:
 ## UI and brand
 
 - Follow [DESIGN.md](DESIGN.md).
-- The source brand asset is `src/assets/figcodex-logo.png`; the repository-facing copy is `icon.png`.
+- The source brand assets are `src/assets/figcc-logo.svg` and `src/assets/figcc-logo.png`; the repository-facing copy is `icon.png`.
 - The header and empty-chat state use the same asset. Do not embed another hand-drawn replacement glyph.
 - Keep the 400 px Figma panel usable: menus must remain inside the viewport and important controls must stay keyboard accessible.
 - User-facing prose uses the native UI font. Monospace is reserved for code and technical values.

@@ -1,6 +1,6 @@
 {
   "id": "1610744892832367485",
-  "name": "FigCodex",
+  "name": "FigCC",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "index.html",
@@ -11,6 +11,6 @@
   "networkAccess": {
     "allowedDomains": ["https://raw.githubusercontent.com"],
     "devAllowedDomains": ["ws://localhost:4319"],
-    "reasoning": "FigCodex connects to a loopback-only Codex bridge and fetches the allowlisted Figma Plugin API snapshot."
+    "reasoning": "FigCC connects to a loopback-only AI bridge and fetches the allowlisted Figma Plugin API snapshot."
   }
 }

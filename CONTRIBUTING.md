@@ -1,4 +1,4 @@
-# Contributing to FigCodex
+# Contributing to FigCC
 
 ## Local development
 
@@ -57,7 +57,7 @@ public/
 
 Canvas selection context is a separate read-only path: `src/code.ts` listens for Figma selection changes, sends bounded metadata and rendered previews to the UI, and `src/UI.svelte` snapshots that context only when the user presses Send. Do not silently upload selection previews on selection-change events.
 
-Do not replace this with a plain `codex exec` subprocess per prompt: that pattern cannot reliably preserve the in-turn client tool handshake used by FigCodex.
+Do not replace this with a plain `codex exec` subprocess per prompt: that pattern cannot reliably preserve the in-turn client tool handshake used by FigCC.
 
 ## Adding a tool
 
@@ -92,4 +92,4 @@ Inspect the generated `.codex-schema/` bindings, update the adapter narrowly, th
 - Keep `README.md` and `README.zh-TW.md` aligned for user-visible behavior.
 - Preserve the upstream FigClaw copyright in `LICENSE` and the derivative-work statement in `NOTICE.md`.
 - Do not remove or obscure attribution to [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw).
-- Do not imply that FigCodex is an official Figma, Anthropic, or OpenAI product.
+- Do not imply that FigCC is an official Figma, Anthropic, or OpenAI product.

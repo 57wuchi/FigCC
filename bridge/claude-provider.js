@@ -328,7 +328,7 @@ export class ClaudeProvider {
           });
           if (!review.approved) {
             return {
-              content: [{ type: 'text', text: `FigCodex auto-review denied ${definition.name}: ${review.reason}` }],
+              content: [{ type: 'text', text: `FigCC auto-review denied ${definition.name}: ${review.reason}` }],
               isError: true,
             };
           }
@@ -380,7 +380,7 @@ export class ClaudeProvider {
         includePartialMessages: true,
         systemPrompt: String(message.instructions || '').slice(0, 160_000),
         mcpServers: { figcodex: mcpServer },
-        // FigCodex injects only Active or explicitly @mentioned canonical
+        // FigCC injects only Active or explicitly @mentioned canonical
         // skills. Do not let Claude's native discovery bypass that UI mode.
         skills: [],
         ...(requestedSessionId ? { resume: requestedSessionId } : {}),

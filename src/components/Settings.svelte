@@ -40,7 +40,7 @@
     <p>Connect this plugin to local Codex and Claude Code runtimes on your Mac.</p>
   </div>
 
-  <FormField label="FigCodex bridge" for="bridge-url">
+  <FormField label="FigCC bridge" for="bridge-url">
     {#snippet badge()}
       {#if connectionStatus === 'ready'}
         <Badge variant="saved">Connected</Badge>
@@ -116,7 +116,7 @@
     <p>1. Run <code>npm run bridge:install</code> once to keep the local bridge available.</p>
     <p>2. Run <code>npm run bridge:token</code>, paste the token above, and save.</p>
     <p>3. Sign in with <code>codex login</code> and/or launch <code>claude</code> once to authenticate.</p>
-    <p>4. FigCodex stores no model API key. Model, effort, and permissions stay provider-specific.</p>
+    <p>4. FigCC stores no model API key. Model, effort, and permissions stay provider-specific.</p>
   </div>
 </section>
 

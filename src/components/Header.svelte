@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Icon from './Icon.svelte';
-  import logoUrl from '../assets/figcodex-logo.png';
+  import logoUrl from '../assets/figcc-logo.svg';
 
   export type Tab = 'chat' | 'skills' | 'settings' | 'history';
 
@@ -22,11 +22,11 @@
 
 <header class="header">
   <div class="product-bar">
-    <div class="brand" aria-label="FigCodex">
+    <div class="brand" aria-label="FigCC">
       <span class="brand-mark" aria-hidden="true">
         <img src={logoUrl} alt="" />
       </span>
-      <span class="brand-name">FigCodex</span>
+      <span class="brand-name">FigCC</span>
     </div>
     <div class="header-actions">
       <div class="provider-switch" role="group" aria-label="Chat provider">
@@ -50,7 +50,7 @@
       {/if}
     </div>
   </div>
-  <nav class="tabs-shell" aria-label="FigCodex sections">
+  <nav class="tabs-shell" aria-label="FigCC sections">
     <button class="tab-btn" class:active={activeTab === 'chat'} aria-current={activeTab === 'chat' ? 'page' : undefined} onclick={() => (activeTab = 'chat')}>Chat</button>
     <button class="tab-btn" class:active={activeTab === 'skills'} aria-current={activeTab === 'skills' ? 'page' : undefined} onclick={() => (activeTab = 'skills')}>Skills</button>
     <button class="tab-btn" class:active={activeTab === 'history'} aria-current={activeTab === 'history' ? 'page' : undefined} onclick={() => (activeTab = 'history')}>History</button>

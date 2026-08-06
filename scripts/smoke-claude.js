@@ -27,7 +27,7 @@ function start(prompt, requestId) {
     chatId: 'claude-smoke-chat',
     threadId: sessionId || null,
     prompt,
-    instructions: 'You are a Figma agent. Follow the requested response exactly. Use only the provided FigCodex tool when requested.',
+    instructions: 'You are a Figma agent. Follow the requested response exactly. Use only the provided FigCC tool when requested.',
     tools: [{
       name: 'get_selection',
       description: 'Return the current Figma selection.',

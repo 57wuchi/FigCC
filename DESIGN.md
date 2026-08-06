@@ -1,10 +1,10 @@
-# FigCodex design system
+# FigCC design system
 
-FigCodex uses a compact, Codex-inspired interface for working with a Figma canvas. This is a project-specific design contract, not an official OpenAI or Codex design-system export.
+FigCC uses a compact, provider-neutral interface for working with a Figma canvas. This is a project-specific design contract, not an official Figma, Anthropic, OpenAI, Claude, or Codex design-system export.
 
 ## Source of truth
 
-OpenAI does not currently publish a Codex App `DESIGN.md`. The public Codex guidance recommends keeping repeated visual decisions in a project-level design file, while the OpenAI Apps SDK publishes reusable UI tokens and components for ChatGPT-connected apps. FigCodex therefore combines:
+OpenAI does not currently publish a Codex App `DESIGN.md`. The public Codex guidance recommends keeping repeated visual decisions in a project-level design file, while the OpenAI Apps SDK publishes reusable UI tokens and components for ChatGPT-connected apps. FigCC therefore combines:
 
 - the visible interaction character of the Codex desktop app: neutral surfaces, restrained controls, clear status, and tool-first density;
 - the OpenAI Apps SDK guidance on accessible tokens, focus states, and reusable components;
@@ -18,11 +18,11 @@ References:
 
 ## Product identity
 
-- Product name: **FigCodex**.
+- Product name: **FigCC**.
 - Positioning: local Codex or Claude Code, directly beside the Figma canvas.
 - Voice: concise, capable, calm. Prefer direct labels such as “Connected”, “New chat”, and “Send”.
-- The brand mark is the purple glass FigCodex symbol in `icon.png`. Use the full-color mark on dark or neutral surfaces; do not redraw it as a code-frame glyph.
-- At very small sizes, preserve the mark's four-part silhouette and dark rounded-square tile instead of adding outlines or text.
+- The brand mark is the four-circle FigCC symbol in `icon.png`: red and orange personality circles above violet terminal and cyan canvas circles.
+- At very small sizes, preserve the four equal circles, orange two-eye face, violet terminal glyph, and dark rounded-square tile instead of adding outlines or text.
 - Green is a status signal, not a decorative brand color.
 
 ## Principles
@@ -75,7 +75,7 @@ References:
 
 ### Header and navigation
 
-- The FigCodex wordmark must be visible in the top row.
+- The FigCC wordmark must be visible in the top row.
 - A compact Codex/Claude segmented switch sits to the right of the wordmark. Switching starts a new empty chat and never transfers context.
 - Tabs use a quiet underline/filled state, not a floating capsule.
 - “New chat” is a familiar plus icon with an accessible label and tooltip.
@@ -115,4 +115,4 @@ References:
 
 ## Naming compatibility
 
-New visible product copy, package metadata, bridge service labels, and new environment variables use `FigCodex` / `figcodex` / `FIGCODEX_*`. Legacy `figclaw_*` Figma storage keys and `.figclaw-data` may be read during migration so existing settings, history, and pairing tokens are not lost.
+Visible product copy and package metadata use `FigCC`. Existing `figcodex`, `FIGCODEX_*`, `com.figcodex.bridge`, Figma storage keys, and `.figcodex-data` paths remain stable for compatibility. Legacy `figclaw_*` Figma storage keys and `.figclaw-data` may be read during migration so existing settings, history, and pairing tokens are not lost.

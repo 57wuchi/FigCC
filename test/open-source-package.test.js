@@ -19,7 +19,7 @@ test('open-source package preserves FigClaw attribution and bilingual guidance',
   ]);
 
   assert.match(license, /Copyright \(c\) 2025 Pavel Laptev/);
-  assert.match(license, /Copyright \(c\) 2026 FigCodex contributors/);
+  assert.match(license, /Copyright \(c\) 2026 FigCC contributors/);
   assert.match(notice, /https:\/\/github\.com\/PavelLaptev\/FigClaw/);
   assert.match(readme, /derivative work based on \[PavelLaptev\/FigClaw\]/i);
   assert.match(readme, /README\.zh-TW\.md/);
@@ -31,13 +31,14 @@ test('open-source package preserves FigClaw attribution and bilingual guidance',
   assert.match(agent, /\/usr\/bin\/pbcopy < \.figcodex-data\/bridge-token/);
   assert.match(claude, /does not ask users for a Claude API key/);
   assert.equal(packageJson.license, 'MIT');
-  assert.equal(packageJson.author, 'FigCodex contributors');
-  assert.match(header, /figcodex-logo\.png/);
-  assert.match(emptyChat, /figcodex-logo\.png/);
+  assert.equal(packageJson.author, 'FigCC contributors');
+  assert.match(header, /figcc-logo\.svg/);
+  assert.match(emptyChat, /figcc-logo\.svg/);
 
   await Promise.all([
     access(new URL('icon.png', root)),
-    access(new URL('src/assets/figcodex-logo.png', root)),
+    access(new URL('src/assets/figcc-logo.svg', root)),
+    access(new URL('src/assets/figcc-logo.png', root)),
     access(new URL('docs/attribution/figclaw-original-icon.jpg', root)),
     access(new URL('docs/attribution/figclaw-original-cover.jpg', root)),
   ]);

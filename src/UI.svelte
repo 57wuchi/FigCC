@@ -387,7 +387,7 @@
         && parsed.hostname === 'raw.githubusercontent.com'
         && parsed.pathname.startsWith('/PavelLaptev/figma-api-snapshot/');
       if (!allowed) {
-        return 'Blocked URL. fetch_docs only allows the FigCodex Figma API snapshot on raw.githubusercontent.com.';
+        return 'Blocked URL. fetch_docs only allows the FigCC Figma API snapshot on raw.githubusercontent.com.';
       }
       const resp = await fetch(url);
       if (!resp.ok) {
@@ -453,7 +453,7 @@
 
   function sendBridge(message: Record<string, unknown>) {
     if (!bridgeSocket || bridgeSocket.readyState !== WebSocket.OPEN || bridgeStatus !== 'ready') {
-      throw new Error('FigCodex bridge is not connected.');
+      throw new Error('FigCC bridge is not connected.');
     }
     bridgeSocket.send(JSON.stringify(message));
   }
@@ -549,7 +549,7 @@
 
   function filesystemBoundary(): string {
     if (permissionProfile === ':workspace') {
-      return 'The user selected Workspace access. Project-root reads and writes may run within the enforced workspace sandbox; stay inside the FigCodex project root and make only explicitly requested file changes.';
+      return 'The user selected Workspace access. Project-root reads and writes may run within the enforced workspace sandbox; stay inside the FigCC project root and make only explicitly requested file changes.';
     }
     if (permissionProfile === ':danger-full-access') {
       return 'The user selected Full access. There is no filesystem sandbox, but you must still use shell or filesystem tools only for explicit project-file requests and keep every change narrowly scoped.';
@@ -852,7 +852,7 @@
   ) {
     if (bridgeStatus !== 'ready') {
       activeTab = 'settings';
-      statusMessage = 'Connect the local FigCodex bridge first.';
+      statusMessage = 'Connect the local FigCC bridge first.';
       return;
     }
     const catalog = providerCatalogs[provider];
@@ -882,7 +882,7 @@
         chatId: currentChatId,
         threadId: currentThreadId,
         prompt: userText,
-        instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCodex tools for all Figma inspection and canvas changes. Canvas tool calls execute directly and are not filesystem permission requests. Reading the exact local paths listed in <attached_files> is part of the user's input and is allowed; never modify those attachment files. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use ${providerLabel()} filesystem or shell tools. ${filesystemBoundary()}`,
+        instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCC tools for all Figma inspection and canvas changes. Canvas tool calls execute directly and are not filesystem permission requests. Reading the exact local paths listed in <attached_files> is part of the user's input and is allowed; never modify those attachment files. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use ${providerLabel()} filesystem or shell tools. ${filesystemBoundary()}`,
         tools: TOOLS,
         model,
         effort,
@@ -929,7 +929,7 @@
     const uploadedFiles = attachedFiles.slice(0, MAX_PROVIDER_FILES);
     if (bridgeStatus !== 'ready') {
       activeTab = 'settings';
-      statusMessage = 'Connect the local FigCodex bridge first.';
+      statusMessage = 'Connect the local FigCC bridge first.';
       return;
     }
     isSending = true;

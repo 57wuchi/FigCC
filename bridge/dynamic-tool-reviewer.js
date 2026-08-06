@@ -17,7 +17,7 @@ export const REVIEW_OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
-export const REVIEWER_INSTRUCTIONS = `You are FigCodex's automatic permission reviewer. Review a proposed
+export const REVIEWER_INSTRUCTIONS = `You are FigCC's automatic permission reviewer. Review a proposed
 side-effecting tool call against the user's exact request. Return only the JSON object required by
 the output schema.
 

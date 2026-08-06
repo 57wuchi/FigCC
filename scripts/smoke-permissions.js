@@ -44,8 +44,8 @@ socket.on('message', (raw) => {
       requestId: 'filesystem-smoke-turn',
       chatId: 'filesystem-smoke-chat',
       threadId: null,
-      prompt: `I explicitly authorize you to create or overwrite only .figcodex-data/auto-review-filesystem-smoke.txt inside this FigCodex project. Write exactly this one line: ${marker}`,
-      instructions: 'This is an explicit project-file request. Use Codex filesystem or shell tooling only inside the FigCodex project root, make exactly the requested one-file change, and do not call the provided Figma tool or use network/subagents. The write is expected to require automatic permission review.',
+      prompt: `I explicitly authorize you to create or overwrite only .figcodex-data/auto-review-filesystem-smoke.txt inside this FigCC project. Write exactly this one line: ${marker}`,
+      instructions: 'This is an explicit project-file request. Use Codex filesystem or shell tooling only inside the FigCC project root, make exactly the requested one-file change, and do not call the provided Figma tool or use network/subagents. The write is expected to require automatic permission review.',
       tools: [{
         name: 'get_selection',
         description: 'Unused read-only Figma tool. Do not call it for this filesystem smoke test.',

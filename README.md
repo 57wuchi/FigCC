@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./icon.png" width="144" alt="FigCodex purple glass logo">
+  <img src="./icon.png" width="144" alt="FigCC four-circle logo">
 </p>
 
-<h1 align="center">FigCodex</h1>
+<h1 align="center">FigCC</h1>
 
 <p align="center">
   A local Codex or Claude Code Figma agent for inspecting, reasoning about, and editing your canvas.
@@ -16,15 +16,15 @@
 </p>
 
 > [!IMPORTANT]
-> FigCodex is a derivative work based on [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw), used under the MIT License. FigCodex replaces the original direct Claude API integration with an authenticated local bridge for Codex CLI and Claude Code, plus a different permission model, interface, and feature set. See [NOTICE.md](NOTICE.md).
+> FigCC, formerly FigCodex, is a derivative work based on [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw), used under the MIT License. FigCC replaces the original direct Claude API integration with an authenticated local bridge for Codex CLI and Claude Code, plus a different permission model, interface, and feature set. See [NOTICE.md](NOTICE.md).
 
-FigCodex connects a Figma plugin to Codex CLI and Claude Code installations already authenticated on your Mac. It does not require a Claude API key or a separate OpenAI model API key inside Figma. Codex uses App Server; Claude uses the official Agent SDK with an in-process FigCodex MCP server. Each provider keeps its own native conversation identity.
+FigCC connects a Figma plugin to Codex CLI and Claude Code installations already authenticated on your Mac. It does not require a Claude API key or a separate OpenAI model API key inside Figma. Codex uses App Server; Claude uses the official Agent SDK with an in-process FigCC MCP server. Each provider keeps its own native conversation identity.
 
-FigCodex is an independent community project and is not affiliated with or endorsed by Figma, Anthropic, or OpenAI.
+FigCC is an independent community project and is not affiliated with or endorsed by Figma, Anthropic, or OpenAI.
 
-## What FigCodex adds
+## What FigCC adds
 
-Compared with the upstream FigClaw project, FigCodex currently includes:
+Compared with the upstream FigClaw project, FigCC currently includes:
 
 - **Two local runtimes** — uses Codex CLI App Server or the Claude Code Agent SDK with each CLI's existing login; the plugin iframe never calls a model API directly.
 - **Provider-isolated chats** — switching Codex/Claude always starts a new empty chat. History restores that chat's provider and resumes only its native Codex thread or Claude session.
@@ -39,14 +39,14 @@ Compared with the upstream FigClaw project, FigCodex currently includes:
 - **Persistent macOS bridge** — a user LaunchAgent can start the bridge at login and restart it if it exits.
 - **Shared native skills** — canonical `skills/<name>/SKILL.md` packages are linked into both `.agents/skills` and `.claude/skills`; upload, activate, `@mention`, create, or update them once for both providers.
 - **History and migration** — saves conversations across Figma files and imports compatible legacy FigClaw settings, history, skills, and pairing tokens.
-- **Codex-inspired interface** — FigCodex branding, compact native typography, purple glass mark, connection state, tool status, compact model/effort/permission controls, and vertically scrollable long-form tabs designed for the 400 px plugin panel.
+- **Dual-provider interface** — FigCC branding, compact native typography, four-circle mark, connection state, tool status, compact model/effort/permission controls, and vertically scrollable long-form tabs designed for the 400 px plugin panel.
 
 ## Architecture
 
 ```text
 Figma plugin UI
     ⇅ authenticated WebSocket (ws://localhost:4319/ws)
-FigCodex local bridge
+FigCC local bridge
     ├⇄ JSON-RPC over stdio → codex app-server
     └⇄ Agent SDK + in-process MCP → Claude Code
     ⇅ tool calls and results
@@ -79,9 +79,9 @@ Codex App Server is used instead of starting a new `codex exec` process for ever
 - a recent Codex CLI with App Server dynamic-tool support and/or a recent Claude Code installation
 - the selected CLI authenticated locally (`codex login` or launch `claude` and sign in)
 
-FigCodex searches `CODEX_BIN`, active Node/NVM installations, the ChatGPT desktop app bundle, and `PATH`, then selects the newest compatible Codex executable. Set `CODEX_BIN=/absolute/path/to/codex` to force a specific binary.
+FigCC searches `CODEX_BIN`, active Node/NVM installations, the ChatGPT desktop app bundle, and `PATH`, then selects the newest compatible Codex executable. Set `CODEX_BIN=/absolute/path/to/codex` to force a specific binary.
 
-For Claude, FigCodex searches `CLAUDE_BIN`, common Claude Code installation paths, active Node/NVM installations, and `PATH`. Set `CLAUDE_BIN=/absolute/path/to/claude` to force a specific binary. Either provider may be unavailable while the other remains usable.
+For Claude, FigCC searches `CLAUDE_BIN`, common Claude Code installation paths, active Node/NVM installations, and `PATH`. Set `CLAUDE_BIN=/absolute/path/to/claude` to force a specific binary. Either provider may be unavailable while the other remains usable.
 
 ## Install
 
@@ -99,7 +99,7 @@ Then import the plugin:
 1. Open Figma desktop.
 2. Choose **Plugins → Development → Import plugin from manifest…**.
 3. Select `public/manifest.json` from this repository.
-4. Open FigCodex → **Settings**.
+4. Open FigCC → **Settings**.
 5. Leave the URL as `http://localhost:4319`.
 6. Paste the value printed by `npm run bridge:token` and choose **Save & Connect**.
 7. Wait for **Connected**, then return to **Chat**.
@@ -110,7 +110,7 @@ Then import the plugin:
 2. Type a request, paste/upload reference images, attach documents or source files with the paperclip, or invoke a passive skill with `@skill-name`.
 3. Choose **Codex** or **Claude** in the header. Changing provider opens a new empty chat and never transfers context.
 4. Choose that provider's live model, reasoning effort, and local-file permission profile beside **Send** when needed.
-5. Review the streamed tool/status messages while FigCodex works. History shows a provider badge and restores the matching runtime automatically.
+5. Review the streamed tool/status messages while FigCC works. History shows a provider badge and restores the matching runtime automatically.
 
 Example requests:
 
@@ -132,7 +132,7 @@ Custom skills are Markdown instruction files:
 - Example skills live as packages under [`skills/`](skills/).
 - `.agents/skills` and `.claude/skills` are symlinks to that canonical directory, so both CLIs see the same updates.
 - The bridge watches the canonical directory directly. External file additions, edits, and removals are re-read from disk and pushed to the plugin automatically; no separate skill index is created.
-- In dedicated FigCodex provider sessions, native project-skill auto-discovery is disabled. The plugin's **Active** toggle and explicit `@skill-name` invocation are the only ways canonical skills enter a prompt.
+- In dedicated FigCC provider sessions, native project-skill auto-discovery is disabled. The plugin's **Active** toggle and explicit `@skill-name` invocation are the only ways canonical skills enter a prompt.
 
 Treat third-party skill files as code-like instructions: inspect them before enabling them.
 
@@ -143,7 +143,7 @@ Treat third-party skill files as code-like instructions: inspect them before ena
 - Codex defaults to the live `:read-only` permission profile with `approvalPolicy: on-request` and `approvalsReviewer: auto_review`. Older compatible CLIs safely fall back to `sandbox: read-only`.
 - The permission control is populated by the live Codex App Server catalog. `:workspace` permits writes inside the project sandbox; `:danger-full-access` removes the filesystem sandbox and is shown as a warning choice.
 - Claude models come from the live Agent SDK catalog. Claude defaults to `:read-only`; Workspace, Auto, and Full access map to Claude Code's native permission modes.
-- User-configured MCP servers stay disabled for the dedicated canvas runtime; Claude receives only the in-process FigCodex MCP server.
+- User-configured MCP servers stay disabled for the dedicated canvas runtime; Claude receives only the in-process FigCC MCP server.
 - Provider switching never copies transcript text or native IDs. History resumes only the provider recorded with that chat.
 - Figma canvas tools, including `run_figma_code`, are forwarded directly to the plugin sandbox without bridge auto-review. Skill storage and downloads retain their separate fail-closed review boundary.
 - The Figma manifest has no wildcard network access. It allows only the loopback bridge and the allowlisted documentation host.
@@ -195,6 +195,6 @@ Read [AGENTS.md](AGENTS.md) for repository-wide engineering constraints and [CON
 
 ## Attribution and license
 
-FigCodex is based on [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw), originally created by Pavel Laptev. The upstream project is MIT licensed, and its original copyright notice is retained.
+FigCC is based on [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw), originally created by Pavel Laptev. The upstream project is MIT licensed, and its original copyright notice is retained.
 
-FigCodex is released under the [MIT License](LICENSE). See [NOTICE.md](NOTICE.md) for the complete attribution and a summary of the substantial modifications.
+FigCC is released under the [MIT License](LICENSE). See [NOTICE.md](NOTICE.md) for the complete attribution and a summary of the substantial modifications.

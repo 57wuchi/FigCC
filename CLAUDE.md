@@ -4,7 +4,7 @@ Read and follow [AGENTS.md](AGENTS.md); it is the canonical repository instructi
 
 ## Claude-specific runtime note
 
-FigCodex supports Claude through the official Claude Agent SDK and the user's existing local Claude Code login. It does not call Anthropic from the Figma iframe and does not ask users for a Claude API key. Do not restore the old direct-browser provider path, `sk-ant-...` settings, or Anthropic endpoints.
+FigCC supports Claude through the official Claude Agent SDK and the user's existing local Claude Code login. It does not call Anthropic from the Figma iframe and does not ask users for a Claude API key. Do not restore the old direct-browser provider path, `sk-ant-...` settings, or Anthropic endpoints.
 
 When working in this repository:
 

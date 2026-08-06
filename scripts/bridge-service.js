@@ -77,7 +77,7 @@ async function install() {
   launchctl('bootstrap', DOMAIN, PLIST_PATH);
   launchctl('enable', SERVICE);
   launchctl('kickstart', '-k', SERVICE);
-  console.log(`FigCodex bridge service installed: ${LABEL}`);
+  console.log(`FigCC bridge service installed: ${LABEL}`);
   console.log('It will start at login and restart automatically if it exits.');
   console.log(`Status: npm run bridge:status`);
   console.log(`Logs: ${DATA_DIR}`);
@@ -88,20 +88,20 @@ async function uninstall() {
   await unlink(PLIST_PATH).catch((error) => {
     if (error?.code !== 'ENOENT') throw error;
   });
-  console.log(`FigCodex bridge service removed: ${LABEL}`);
+  console.log(`FigCC bridge service removed: ${LABEL}`);
 }
 
 async function status() {
   const result = spawnSync('/bin/launchctl', ['print', SERVICE], { encoding: 'utf8' });
   if (result.status !== 0) {
-    console.log('FigCodex bridge service is not installed or not loaded.');
+    console.log('FigCC bridge service is not installed or not loaded.');
     process.exitCode = 1;
     return;
   }
   const state = result.stdout.match(/\bstate = ([^\n]+)/)?.[1]?.trim() || 'loaded';
   const pid = result.stdout.match(/\bpid = (\d+)/)?.[1] || '—';
   const token = (await readFile(path.join(DATA_DIR, 'bridge-token'), 'utf8').catch(() => '')).trim();
-  console.log(`FigCodex bridge service: ${state}`);
+  console.log(`FigCC bridge service: ${state}`);
   console.log(`PID: ${pid}`);
   console.log('URL: http://127.0.0.1:4319');
   console.log(`Pairing token: ${token ? 'available via npm run bridge:token' : 'not created yet'}`);

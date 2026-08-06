@@ -162,7 +162,7 @@ function attachCodexEvents(instance) {
   instance.on('request', (request) => {
     void handleCodexRequest(instance, request).catch((error) => {
       instance.respond(request.id, {
-        contentItems: [{ type: 'inputText', text: `FigCodex bridge error: ${publicError(error)}` }],
+        contentItems: [{ type: 'inputText', text: `FigCC bridge error: ${publicError(error)}` }],
         success: false,
       });
     });
@@ -171,7 +171,7 @@ function attachCodexEvents(instance) {
 
 async function handleCodexRequest(instance, request) {
   if (request.method !== 'item/tool/call') {
-    instance.respondError(request.id, `FigCodex does not support server request: ${request.method}`);
+    instance.respondError(request.id, `FigCC does not support server request: ${request.method}`);
     return;
   }
 
@@ -179,7 +179,7 @@ async function handleCodexRequest(instance, request) {
   const socket = threadOwners.get(params.threadId);
   if (!socket) {
     instance.respond(request.id, {
-      contentItems: [{ type: 'inputText', text: 'FigCodex plugin is disconnected.' }],
+      contentItems: [{ type: 'inputText', text: 'FigCC plugin is disconnected.' }],
       success: false,
     });
     return;
@@ -205,7 +205,7 @@ async function handleCodexRequest(instance, request) {
 
     if (threadOwners.get(params.threadId) !== socket || socket.readyState !== WebSocket.OPEN) {
       instance.respond(request.id, {
-        contentItems: [{ type: 'inputText', text: 'FigCodex plugin disconnected during auto-review.' }],
+        contentItems: [{ type: 'inputText', text: 'FigCC plugin disconnected during auto-review.' }],
         success: false,
       });
       return;
@@ -225,7 +225,7 @@ async function handleCodexRequest(instance, request) {
       instance.respond(request.id, {
         contentItems: [{
           type: 'inputText',
-          text: `FigCodex auto-review denied ${params.tool}: ${review.reason}`,
+          text: `FigCC auto-review denied ${params.tool}: ${review.reason}`,
         }],
         success: false,
       });
@@ -469,7 +469,7 @@ async function executeProviderTool(socket, context) {
 }
 
 function normalizeTools(rawTools) {
-  if (!Array.isArray(rawTools) || rawTools.length === 0) throw new Error('FigCodex tools are missing.');
+  if (!Array.isArray(rawTools) || rawTools.length === 0) throw new Error('FigCC tools are missing.');
   return rawTools.slice(0, 32).map((tool) => {
     const name = String(tool?.name || '');
     if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error(`Invalid tool name: ${name}`);
@@ -734,7 +734,7 @@ const server = http.createServer((request, response) => {
   response.end(JSON.stringify({ error: 'Not found' }));
 });
 server.on('error', async (error) => {
-  console.error(`FigCodex bridge could not listen on ${HOST}:${PORT}: ${publicError(error)}`);
+  console.error(`FigCC bridge could not listen on ${HOST}:${PORT}: ${publicError(error)}`);
   await codex?.stop();
   process.exit(1);
 });
@@ -777,10 +777,10 @@ webSocketServer.on('connection', (socket) => {
       if (pending.socket !== socket) continue;
       pendingToolCalls.delete(requestId);
       if (pending.provider === 'claude') {
-        pending.resolve({ error: 'FigCodex plugin disconnected before the tool completed.' });
+        pending.resolve({ error: 'FigCC plugin disconnected before the tool completed.' });
       } else {
         codex?.respond(pending.requestId, {
-          contentItems: [{ type: 'inputText', text: 'FigCodex plugin disconnected before the tool completed.' }],
+          contentItems: [{ type: 'inputText', text: 'FigCC plugin disconnected before the tool completed.' }],
           success: false,
         });
       }
@@ -789,7 +789,7 @@ webSocketServer.on('connection', (socket) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`FigCodex Bridge listening on http://${HOST}:${PORT}`);
+  console.log(`FigCC Bridge listening on http://${HOST}:${PORT}`);
   console.log('Pairing token ready. Run npm run bridge:token to copy it safely.');
   if (codexInfo) console.log(`Codex CLI ${codexInfo.version}: ${codexInfo.binary}`);
   if (claudeInfo) console.log(`Claude Code ${claudeInfo.version}: ${claudeInfo.binary}`);

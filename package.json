@@ -1,7 +1,7 @@
 {
   "name": "figcodex",
   "version": "1.0.0",
-  "description": "FigCodex — a Codex and Claude Code Figma plugin for inspecting and editing the current canvas through a secure local bridge.",
+  "description": "FigCC — a Codex and Claude Code plugin for inspecting and editing the current Figma canvas through a secure local bridge.",
   "main": "code.js",
   "scripts": {
     "build": "node scripts/build.js",
@@ -21,7 +21,7 @@
     "test": "node --test test/*.test.js"
   },
   "type": "module",
-  "author": "FigCodex contributors",
+  "author": "FigCC contributors",
   "contributors": [
     "Pavel Laptev (original FigClaw author)"
   ],

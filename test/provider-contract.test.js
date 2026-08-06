@@ -109,7 +109,7 @@ test('bundled skills do not inject the removed design disclaimer', async () => {
   assert.ok(!overlyCautious.includes('I am not responsible for any design decisions'));
 });
 
-test('provider-native skill discovery cannot bypass FigCodex skill modes', async () => {
+test('provider-native skill discovery cannot bypass FigCC skill modes', async () => {
   const [server, claude] = await Promise.all([
     readFile(path.join(root, 'bridge', 'server.js'), 'utf8'),
     readFile(path.join(root, 'bridge', 'claude-provider.js'), 'utf8'),

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./icon.png" width="144" alt="FigCodex 紫色玻璃 Logo">
+  <img src="./icon.png" width="144" alt="FigCC 四圓 Logo">
 </p>
 
-<h1 align="center">FigCodex</h1>
+<h1 align="center">FigCC</h1>
 
 <p align="center">
   在 Figma 裡使用本機 Codex 或 Claude Code 檢查、理解並修改畫布的設計 Agent。
@@ -16,15 +16,15 @@
 </p>
 
 > [!IMPORTANT]
-> FigCodex 是以 [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw) 為基礎的衍生作品，依 MIT License 使用與修改。FigCodex 將原本由 Figma 直接連線 Claude API 的方式改為本機 bridge，可接 Codex CLI 與 Claude Code，並新增不同的執行架構、權限模式、介面與功能。完整說明請見 [NOTICE.md](NOTICE.md)。
+> FigCC（原名 FigCodex）是以 [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw) 為基礎的衍生作品，依 MIT License 使用與修改。FigCC 將原本由 Figma 直接連線 Claude API 的方式改為本機 bridge，可接 Codex CLI 與 Claude Code，並新增不同的執行架構、權限模式、介面與功能。完整說明請見 [NOTICE.md](NOTICE.md)。
 
-FigCodex 會把 Figma 外掛連接到 Mac 上已安裝、已登入的 Codex CLI 或 Claude Code。Figma 裡不需要填 Claude API Key，也不需要另外保存 OpenAI 模型 API Key。Codex 使用 App Server；Claude 使用官方 Agent SDK 與 bridge 內的 FigCodex MCP server。兩個 Provider 各自保存原生 conversation identity。
+FigCC 會把 Figma 外掛連接到 Mac 上已安裝、已登入的 Codex CLI 或 Claude Code。Figma 裡不需要填 Claude API Key，也不需要另外保存 OpenAI 模型 API Key。Codex 使用 App Server；Claude 使用官方 Agent SDK 與 bridge 內的 FigCC MCP server。兩個 Provider 各自保存原生 conversation identity。
 
-FigCodex 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬或官方背書關係。
+FigCC 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬或官方背書關係。
 
-## FigCodex 新增的功能
+## FigCC 新增的功能
 
-相較於上游 FigClaw，目前 FigCodex 包含：
+相較於上游 FigClaw，目前 FigCC 包含：
 
 - **雙本機執行環境**：可使用 Codex CLI App Server 或 Claude Code Agent SDK，沿用各 CLI 既有登入，外掛 iframe 不直接呼叫模型 API。
 - **Provider 隔離聊天**：切換 Codex／Claude 一律開啟全新空白聊天。從 History 開啟時會自動回到該聊天原本的 Provider，且只續接原生 Codex thread 或 Claude session。
@@ -39,21 +39,21 @@ FigCodex 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬�
 - **macOS 常駐 bridge**：可安裝使用者層級 LaunchAgent，登入時啟動，意外退出時自動重啟。
 - **共用原生 Skills**：以 `skills/<name>/SKILL.md` 作為唯一來源，並連結到 `.agents/skills` 與 `.claude/skills`；只需上傳、啟用、`@mention`、建立或更新一次。
 - **歷史記錄與遷移**：聊天可跨 Figma 檔案保存，並相容匯入舊 FigClaw 的設定、歷史、skills 與 pairing token。
-- **FigCodex 視覺介面**：包含紫色玻璃品牌圖形、Codex 一致的字體、連線與工具狀態、適合 400 px 外掛面板的模型／effort／權限控制，以及內容過長時可垂直捲動的分頁。
+- **雙 Provider 視覺介面**：包含 FigCC 四圓品牌圖形、原生 UI 字體、連線與工具狀態、適合 400 px 外掛面板的模型／effort／權限控制，以及內容過長時可垂直捲動的分頁。
 
 ## 架構
 
 ```text
 Figma plugin UI
     ⇅ 已驗證 WebSocket（ws://localhost:4319/ws）
-FigCodex 本機 bridge
+FigCC 本機 bridge
     ├⇄ stdio JSON-RPC → codex app-server
     └⇄ Agent SDK + in-process MCP → Claude Code
     ⇅ tool 呼叫與結果
 Figma plugin sandbox → 目前的 Figma 文件
 ```
 
-FigCodex 不會為每個 prompt 重新啟動一次 `codex exec`。Claude 則透過官方 Agent SDK 與受限的 in-process MCP server 執行。兩條路徑都能暫停等待 Figma tool、接收結果、繼續串流，並在之後恢復各自的原生 conversation。
+FigCC 不會為每個 prompt 重新啟動一次 `codex exec`。Claude 則透過官方 Agent SDK 與受限的 in-process MCP server 執行。兩條路徑都能暫停等待 Figma tool、接收結果、繼續串流，並在之後恢復各自的原生 conversation。
 
 ## Figma 工具
 
@@ -79,7 +79,7 @@ FigCodex 不會為每個 prompt 重新啟動一次 `codex exec`。Claude 則透�
 - 支援 App Server dynamic tools 的新版 Codex CLI，和／或新版 Claude Code
 - 已在本機登入要使用的 CLI（執行 `codex login`，或先啟動一次 `claude` 完成登入）
 
-FigCodex 會依序搜尋 `CODEX_BIN`、目前 Node／NVM 安裝、ChatGPT desktop app 內附的 Codex，以及 `PATH`，再選擇相容版本中最新的執行檔。如需固定版本，可設定 `CODEX_BIN=/absolute/path/to/codex`。
+FigCC 會依序搜尋 `CODEX_BIN`、目前 Node／NVM 安裝、ChatGPT desktop app 內附的 Codex，以及 `PATH`，再選擇相容版本中最新的執行檔。如需固定版本，可設定 `CODEX_BIN=/absolute/path/to/codex`。
 
 Claude 會依序搜尋 `CLAUDE_BIN`、Claude Code 常見安裝位置、目前 Node／NVM 安裝與 `PATH`。如需固定版本，可設定 `CLAUDE_BIN=/absolute/path/to/claude`。其中一個 Provider 未安裝時，另一個仍可使用。
 
@@ -99,7 +99,7 @@ npm run bridge:token
 1. 開啟 Figma desktop。
 2. 選擇 **Plugins → Development → Import plugin from manifest…**。
 3. 選取本專案的 `public/manifest.json`。
-4. 開啟 FigCodex → **Settings**。
+4. 開啟 FigCC → **Settings**。
 5. Bridge URL 保持 `http://localhost:4319`。
 6. 貼上 `npm run bridge:token` 顯示的 token，按 **Save & Connect**。
 7. 等待顯示 **Connected**，回到 **Chat**。
@@ -132,7 +132,7 @@ npm run bridge:token
 - 範例以標準 skill package 形式位於 [`skills/`](skills/)。
 - `.agents/skills` 與 `.claude/skills` 都連到這個唯一目錄，因此兩個 CLI 會同步看到更新。
 - bridge 會直接監聽 canonical 目錄；從外部新增、修改或刪除檔案後，會重新讀取磁碟內容並自動推送至 Plugin，不會建立另一份 skill 索引。
-- FigCodex 專用的 Provider session 會停用原生的專案 skill 自動載入；canonical skill 只有透過 Plugin 的 **Active** 開關或明確的 `@skill-name` 才會進入 prompt。
+- FigCC 專用的 Provider session 會停用原生的專案 skill 自動載入；canonical skill 只有透過 Plugin 的 **Active** 開關或明確的 `@skill-name` 才會進入 prompt。
 
 第三方 skill 應視為類似程式碼的指令；啟用前請先閱讀內容。
 
@@ -143,7 +143,7 @@ npm run bridge:token
 - Codex 預設使用 live `:read-only` 權限 profile，搭配 `approvalPolicy: on-request` 與 `approvalsReviewer: auto_review`；較舊的相容 CLI 會安全退回 `sandbox: read-only`。
 - 權限選單來自 Codex App Server 的 live catalog。`:workspace` 可在專案 sandbox 內寫入；`:danger-full-access` 會移除檔案沙箱，介面會以警告選項顯示。
 - Claude 模型來自 Agent SDK live catalog。Claude 預設為 `:read-only`；Workspace、Auto 與 Full access 會對應 Claude Code 的原生權限模式。
-- 專用畫布 Agent 不會載入使用者設定的 MCP servers；Claude 只會收到 bridge 內的 FigCodex MCP server。
+- 專用畫布 Agent 不會載入使用者設定的 MCP servers；Claude 只會收到 bridge 內的 FigCC MCP server。
 - 切換 Provider 不會複製 transcript 或原生 ID；History 只會續接該聊天記錄的 Provider。
 - 包含 `run_figma_code` 在內的 Figma 畫布工具會直接送進 plugin sandbox，不經 bridge auto-review；skill storage 與下載仍保留獨立、fail-closed 的審查邊界。
 - Figma manifest 沒有 wildcard 網路權限，只允許本機 bridge 與 allowlist 文件來源。
@@ -195,6 +195,6 @@ Repository 的工程限制請先讀 [AGENTS.md](AGENTS.md)，本機開發流程�
 
 ## 來源與授權
 
-FigCodex 基於 Pavel Laptev 建立的 [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw)。上游專案採 MIT License，原始版權聲明已完整保留。
+FigCC 基於 Pavel Laptev 建立的 [PavelLaptev/FigClaw](https://github.com/PavelLaptev/FigClaw)。上游專案採 MIT License，原始版權聲明已完整保留。
 
-FigCodex 同樣以 [MIT License](LICENSE) 開源。完整來源標示與重大修改摘要請見 [NOTICE.md](NOTICE.md)。
+FigCC 同樣以 [MIT License](LICENSE) 開源。完整來源標示與重大修改摘要請見 [NOTICE.md](NOTICE.md)。

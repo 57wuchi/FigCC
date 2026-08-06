@@ -42,7 +42,7 @@ async function appServerArgs(binary) {
       }
     }
   } catch {
-    // Older compatible builds may not support JSON listing. FigCodex's thread
+    // Older compatible builds may not support JSON listing. FigCC's thread
     // still receives an explicit tool-only runtime boundary in that case.
   }
   return args;
@@ -83,7 +83,7 @@ export class CodexAppServer extends EventEmitter {
     await this.request('initialize', {
       clientInfo: {
         name: 'figcodex_local_bridge',
-        title: 'FigCodex Local Bridge',
+        title: 'FigCC Local Bridge',
         version: '2.0.0',
       },
       capabilities: { experimentalApi: true },

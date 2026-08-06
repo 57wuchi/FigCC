@@ -1,12 +1,12 @@
 # Attribution notice
 
-FigCodex is a derivative work based on [FigClaw](https://github.com/PavelLaptev/FigClaw), originally created by Pavel Laptev and released under the MIT License.
+FigCC, formerly FigCodex, is a derivative work based on [FigClaw](https://github.com/PavelLaptev/FigClaw), originally created by Pavel Laptev and released under the MIT License.
 
 The original copyright notice is preserved in [LICENSE](LICENSE):
 
 > Copyright (c) 2025 Pavel Laptev
 
-FigCodex retains the original project's MIT terms and adds substantial changes, including:
+FigCC retains the original project's MIT terms and adds substantial changes, including:
 
 - replacement of the direct Claude API integration with an authenticated local bridge for Codex CLI App Server and the Claude Code Agent SDK;
 - pairing-token authentication and loopback-only WebSocket transport;
@@ -16,9 +16,9 @@ FigCodex retains the original project's MIT terms and adds substantial changes, 
 - provider-isolated Codex threads and Claude sessions, cross-file chat history, and migration from legacy FigClaw storage;
 - canonical skill packages shared through `.agents/skills` and `.claude/skills` symlinks;
 - a macOS LaunchAgent installer for a persistent local bridge;
-- a redesigned FigCodex interface, visual system, and purple glass brand mark;
+- a redesigned FigCC interface, dual-provider visual system, and four-circle brand mark;
 - additional tests, security contracts, documentation, and Traditional Chinese documentation.
 
 The files under `docs/attribution/` preserve original FigClaw promotional assets for attribution and historical reference. They remain covered by the upstream project's MIT License.
 
-FigCodex is an independent community project. It is not affiliated with, endorsed by, or sponsored by Pavel Laptev, Figma, Anthropic, OpenAI, or their respective affiliates. Figma, Claude, OpenAI, ChatGPT, and Codex are trademarks of their respective owners.
+FigCC is an independent community project. It is not affiliated with, endorsed by, or sponsored by Pavel Laptev, Figma, Anthropic, OpenAI, or their respective affiliates. Figma, Claude, OpenAI, ChatGPT, and Codex are trademarks of their respective owners.

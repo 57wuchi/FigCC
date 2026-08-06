@@ -1,5 +1,5 @@
 <script lang="ts">
-  import logoUrl from '../assets/figcodex-logo.png';
+  import logoUrl from '../assets/figcc-logo.svg';
 </script>
 
 <div class="empty">
@@ -8,7 +8,7 @@
   </div>
   <div class="intro">
     <h1>Work with your canvas</h1>
-    <p>Select a layer or describe a change. FigCodex can inspect the file, reason with your selected provider, and edit the canvas directly.</p>
+    <p>Select a layer or describe a change. FigCC can inspect the file, reason with your selected provider, and edit the canvas directly.</p>
   </div>
   <div class="capabilities" aria-label="Available context">
     <span>Selection aware</span>
