@@ -19,7 +19,7 @@ References:
 ## Product identity
 
 - Product name: **FigCodex**.
-- Positioning: Codex, directly beside the Figma canvas.
+- Positioning: local Codex or Claude Code, directly beside the Figma canvas.
 - Voice: concise, capable, calm. Prefer direct labels such as “Connected”, “New chat”, and “Send”.
 - The brand mark is the purple glass FigCodex symbol in `icon.png`. Use the full-color mark on dark or neutral surfaces; do not redraw it as a code-frame glyph.
 - At very small sizes, preserve the mark's four-part silhouette and dark rounded-square tile instead of adding outlines or text.
@@ -76,6 +76,7 @@ References:
 ### Header and navigation
 
 - The FigCodex wordmark must be visible in the top row.
+- A compact Codex/Claude segmented switch sits to the right of the wordmark. Switching starts a new empty chat and never transfers context.
 - Tabs use a quiet underline/filled state, not a floating capsule.
 - “New chat” is a familiar plus icon with an accessible label and tooltip.
 
@@ -83,9 +84,10 @@ References:
 
 - The composer is the strongest surface in Chat.
 - Primary Send uses a light button with dark text.
-- The controls beside Send show the active Codex model, effective reasoning effort, and filesystem permission profile. Their options come from the local App Server catalogs, and unsupported choices are never shown.
+- The controls beside Send show the active provider's model, effective reasoning effort, and filesystem permission profile. Options come from the live provider catalog, and unsupported choices are never shown.
 - Figma selection uses the selection token and includes node name, type, dimensions, and preview/text where useful.
 - Uploaded references and live Figma selection remain visually distinct.
+- The image control is followed by a paperclip control for bounded document and source-file attachments. Attached files show filename, size, removal, error, and keyboard-focus states before Send.
 
 ### Messages and tool calls
 
@@ -97,6 +99,7 @@ References:
 
 - Pairing token is described as a local secret, never as an API key.
 - Connection state appears beside the bridge label and in text.
+- Codex CLI and Claude Code readiness are shown independently; one unavailable provider does not hide a ready provider.
 - Figma canvas edits execute directly and are visually distinct from filesystem permissions.
 - The default filesystem profile is Read only. Workspace and Full access must remain explicit user choices, and Full access uses warning text in addition to color.
 - Auto review applies to local-file escalation and other local side effects. It must not be described as bypassing permissions.

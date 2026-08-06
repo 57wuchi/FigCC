@@ -8,12 +8,13 @@ The original copyright notice is preserved in [LICENSE](LICENSE):
 
 FigCodex retains the original project's MIT terms and adds substantial changes, including:
 
-- replacement of the Claude API integration with a local Codex CLI App Server bridge;
+- replacement of the direct Claude API integration with an authenticated local bridge for Codex CLI App Server and the Claude Code Agent SDK;
 - pairing-token authentication and loopback-only WebSocket transport;
 - automatic review for side-effecting Figma tools and Codex filesystem escalations;
-- live Codex model and reasoning-effort selection;
+- live provider-specific model, reasoning-effort, and permission selection;
 - Figma selection metadata, text context, and rendered visual previews in the composer;
-- persistent Codex threads, cross-file chat history, and migration from legacy FigClaw storage;
+- provider-isolated Codex threads and Claude sessions, cross-file chat history, and migration from legacy FigClaw storage;
+- canonical skill packages shared through `.agents/skills` and `.claude/skills` symlinks;
 - a macOS LaunchAgent installer for a persistent local bridge;
 - a redesigned FigCodex interface, visual system, and purple glass brand mark;
 - additional tests, security contracts, documentation, and Traditional Chinese documentation.

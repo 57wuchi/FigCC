@@ -13,26 +13,31 @@ This file contains repository-wide instructions for coding agents working on Fig
 ## Runtime architecture
 
 ```text
-Figma iframe UI → authenticated loopback WebSocket bridge → codex app-server
-       ↑ dynamic tool calls and results ↓
+                                      ┌→ codex app-server
+Figma iframe UI → authenticated bridge┤
+       ↑ tool calls and results ↓      └→ Claude Code Agent SDK
 Figma plugin sandbox → open Figma document
 ```
 
-- `src/UI.svelte` owns the iframe, WebSocket client, conversation state, streamed Codex events, and tool-call routing.
+- `src/UI.svelte` owns the iframe, WebSocket client, provider-scoped conversation state, streamed events, and tool-call routing.
 - `src/code.ts` owns Figma APIs, client storage, selection snapshots, downloads, and tool execution.
-- `bridge/server.js` owns pairing authentication, Codex threads/turns, model discovery, attachments, and dynamic-tool routing.
+- `bridge/server.js` owns pairing authentication, provider dispatch, Codex threads, Claude sessions, attachments, skills, and tool routing.
 - `bridge/codex-app-server.js` is the JSON-RPC stdio adapter.
+- `bridge/claude-provider.js` is the Claude Code Agent SDK adapter and in-process FigCodex MCP server.
 - `bridge/dynamic-tool-reviewer.js` performs the independent fail-closed review for side-effecting FigCodex tools.
+- `bridge/skill-store.js` owns canonical filesystem skill packages under `skills/<name>/SKILL.md`.
 - `src/tools.ts` is the dynamic-tool schema source of truth.
 - Do not replace the App Server flow with one `codex exec` subprocess per prompt; that breaks the in-turn client tool handshake and native thread resume.
+- A chat belongs to exactly one provider. Switching Codex/Claude starts a new empty chat; History restores the chat's recorded provider and only its native thread/session ID. Never import transcript text across providers.
 
 ## Security invariants
 
 Do not weaken these without an explicit, security-reviewed request:
 
 - The bridge binds to loopback by default and requires the pairing token.
-- Pairing tokens, Codex credentials, `.figcodex-data/`, and `.figclaw-data/` must never enter git, prompts, UI diagnostics, or public logs.
+- Pairing tokens, Codex/Claude credentials, `.figcodex-data/`, and `.figclaw-data/` must never enter git, prompts, UI diagnostics, or public logs.
 - Codex defaults to the live `:read-only` permission profile with `approvalPolicy: on-request`, `approvalsReviewer: auto_review`, and this project as its narrow runtime root. Workspace and full-access profiles remain explicit user choices.
+- Claude defaults to the locked `:read-only` profile, uses the local Claude Code login through the official Agent SDK, and never asks FigCodex for an Anthropic API key. Workspace, Auto, and Full access remain explicit choices.
 - Figma canvas inspection and mutations run directly through the plugin sandbox. Skill writes, downloads, and local project-file escalations retain their applicable review boundary.
 - Bridge-side review for actions that still require it fails closed. A parse error, timeout, unavailable reviewer, or uncertain decision is not approval.
 - Keep compatible user-configured MCP servers disabled for the dedicated canvas agent unless a deliberate architecture change is approved and tested.
@@ -46,8 +51,9 @@ Do not weaken these without an explicit, security-reviewed request:
 - New names use FigCodex identifiers.
 - Legacy FigClaw storage keys, `.figclaw-data`, pairing tokens, and environment variables are read only as migration fallbacks.
 - Do not remove a migration fallback without documenting the breaking change.
-- Preserve Codex thread IDs and the current thread policy version when changing chat history.
-- Model, reasoning-effort, and permission-profile choices must come from the live App Server catalogs; do not hard-code a marketing model or permissions list.
+- Preserve Codex thread IDs, Claude session IDs, each provider's policy version, and provider ownership when changing chat history.
+- Model and reasoning-effort choices must come from each live provider catalog. Permission choices must reflect the installed provider's supported runtime modes; do not hard-code marketing model names.
+- `skills/` is canonical. Keep `.agents/skills -> ../skills` and `.claude/skills -> ../skills`; do not fork provider-specific copies of the same skill.
 
 ## Pairing-token assistance
 
@@ -79,6 +85,7 @@ npm run bridge:smoke
 npm run bridge:review-smoke
 npm run bridge:permissions-smoke
 npm run bridge:selection-smoke
+npm run bridge:claude-smoke
 ```
 
 When the experimental Codex App Server contract changes:
