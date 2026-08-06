@@ -12,6 +12,7 @@ let phase = 1;
 let answer = '';
 let model = '';
 let effort = '';
+let workspacePath = '';
 let finished = false;
 const timeout = setTimeout(() => finish(new Error('Claude bridge smoke test timed out.')), 240_000);
 
@@ -26,6 +27,7 @@ function start(prompt, requestId) {
     requestId,
     chatId: 'claude-smoke-chat',
     threadId: sessionId || null,
+    workspacePath,
     prompt,
     instructions: 'You are a Figma agent. Follow the requested response exactly. Use only the provided FigCC tool when requested.',
     tools: [{
@@ -57,6 +59,7 @@ socket.on('open', () => send({ type: 'authenticate', token }));
 socket.on('message', (raw) => {
   const message = JSON.parse(String(raw));
   if (message.type === 'bridge.ready') {
+    workspacePath = String(message.workspace?.path || '');
     const claude = message.providers?.claude;
     if (!claude?.available) return finish(new Error(`Claude provider unavailable: ${claude?.error || ''}`));
     const selected = claude.models?.find((item) => item.isDefault) || claude.models?.[0];

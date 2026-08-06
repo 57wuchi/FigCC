@@ -12,6 +12,13 @@
     error?: string;
   };
 
+  type WorkspaceState = {
+    selected: boolean;
+    path: string;
+    name: string;
+    skillsPath: string;
+  };
+
   let {
     bridgeUrl = $bindable('http://localhost:4319'),
     bridgeToken = $bindable(''),
@@ -19,8 +26,13 @@
     connectionDetail = '',
     provider = 'codex',
     providers = {},
+    workspace = null,
+    workspacePending = false,
+    workspaceDisabled = false,
     onSave,
     onReconnect,
+    onChooseWorkspace,
+    onClearWorkspace,
   }: {
     bridgeUrl: string;
     bridgeToken: string;
@@ -28,8 +40,13 @@
     connectionDetail?: string;
     provider?: 'codex' | 'claude';
     providers?: Partial<Record<'codex' | 'claude', ProviderState>>;
+    workspace?: WorkspaceState | null;
+    workspacePending?: boolean;
+    workspaceDisabled?: boolean;
     onSave: () => void;
     onReconnect: () => void;
+    onChooseWorkspace: () => void;
+    onClearWorkspace: () => void;
   } = $props();
 
 </script>
@@ -94,6 +111,37 @@
     {/each}
   </div>
 
+  <div class="workspace-card">
+    <div class="permission-title">
+      <span>Project workspace</span>
+      <Badge variant={workspace?.selected ? 'active' : 'label'}>
+        {workspace?.selected ? 'Linked' : 'Default'}
+      </Badge>
+    </div>
+    <div class="workspace-path" title={workspace?.path || ''}>
+      {workspace?.path || 'Connect the bridge to load the workspace.'}
+    </div>
+    <div class="hint">
+      The selected folder becomes the AI project root. Its <code>skills/</code> folder is merged with FigCC's built-in skills and refreshed automatically when files change.
+    </div>
+    <div class="workspace-actions">
+      <Button
+        variant="outline"
+        onclick={onChooseWorkspace}
+        disabled={workspaceDisabled || workspacePending}
+      >
+        {workspacePending ? 'Choosing…' : 'Choose folder…'}
+      </Button>
+      {#if workspace?.selected}
+        <Button
+          variant="ghost"
+          onclick={onClearWorkspace}
+          disabled={workspaceDisabled || workspacePending}
+        >Use FigCC folder</Button>
+      {/if}
+    </div>
+  </div>
+
   <div class="permission-card">
     <div class="permission-title">
       <span>Filesystem permissions</span>
@@ -154,7 +202,8 @@
     gap: 6px;
   }
 
-  .permission-card {
+  .permission-card,
+  .workspace-card {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -162,6 +211,25 @@
     border: 1px solid var(--color-border-1);
     border-radius: var(--radius-md);
     background: var(--color-surface-1);
+  }
+
+  .workspace-path {
+    padding: 8px;
+    overflow: hidden;
+    border: 1px solid var(--color-border-1);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    font-size: 10px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-actions {
+    display: flex;
+    gap: 6px;
   }
 
   .provider-grid {

@@ -14,6 +14,7 @@
     addedAt: number;
     isDefault?: boolean;
     mode?: 'passive' | 'active';
+    source?: 'bundled' | 'workspace';
   };
 
   let {
@@ -169,6 +170,7 @@
           {#if skill.isDefault}
             <Badge>built-in</Badge>
           {:else}
+            <Badge>{skill.source === 'workspace' ? 'workspace' : 'built-in'}</Badge>
             <Badge variant={skill.mode === 'passive' ? 'passive' : 'active'}>
               {skill.mode === 'passive' ? 'passive' : 'active'}
             </Badge>

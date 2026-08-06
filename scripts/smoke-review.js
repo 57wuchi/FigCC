@@ -10,6 +10,7 @@ const socket = new WebSocket(process.env.FIGCODEX_WS_URL || process.env.FIGCLAW_
 let reviewEventReceived = false;
 let toolExecuted = false;
 let finished = false;
+let workspacePath = '';
 const timeout = setTimeout(() => finish(new Error('Canvas permission smoke test timed out.')), 240_000);
 
 function send(message) {
@@ -33,11 +34,13 @@ socket.on('open', () => send({ type: 'authenticate', token }));
 socket.on('message', (raw) => {
   const message = JSON.parse(String(raw));
   if (message.type === 'bridge.ready') {
+    workspacePath = String(message.workspace?.path || '');
     send({
       type: 'turn.start',
       requestId: 'canvas-permission-smoke-turn',
       chatId: 'canvas-permission-smoke-chat',
       threadId: null,
+      workspacePath,
       prompt: 'I explicitly authorize one harmless Figma tool call now. Call run_figma_code exactly once with code `return { reviewed: true }`, then reply exactly: review checked',
       instructions: 'Use the provided run_figma_code tool exactly once. Do not use shell, filesystem, network, or any other tool.',
       tools: [{

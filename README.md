@@ -37,6 +37,7 @@ Compared with the upstream FigClaw project, FigCC currently includes:
 - **Selectable local-file permissions** — Codex defaults to the CLI's Read only profile with automatically reviewed escalation for explicit project-file work; Workspace and Full access remain explicit user choices.
 - **Authenticated local transport** — the bridge binds to loopback and requires a persistent random pairing token.
 - **Persistent macOS bridge** — a user LaunchAgent can start the bridge at login and restart it if it exits.
+- **Selectable project workspace** — Settings opens a native macOS folder picker. The chosen folder becomes the provider project root, while its live `skills/` directory is merged with FigCC's built-in skills.
 - **Shared native skills** — canonical `skills/<name>/SKILL.md` packages are linked into both `.agents/skills` and `.claude/skills`; upload, activate, `@mention`, create, or update them once for both providers.
 - **History and migration** — saves conversations across Figma files and imports compatible legacy FigClaw settings, history, skills, and pairing tokens.
 - **Dual-provider interface** — FigCC branding, compact native typography, four-circle mark, connection state, tool status, compact model/effort/permission controls, and vertically scrollable long-form tabs designed for the 400 px plugin panel.
@@ -70,7 +71,7 @@ Codex App Server is used instead of starting a new `codex exec` process for ever
 | `fetch_docs` | Fetch an allowlisted Figma Plugin API reference page. |
 | `notify` | Show a Figma toast. |
 | `download_files` | Download generated text or binary files, with ZIP fallback for multiple files. |
-| `create_skill` / `update_skill` | Persist agent-authored skill documents in the plugin. |
+| `create_skill` / `update_skill` | Persist agent-authored skill documents in the selected workspace, or FigCC by default. |
 
 ## Requirements
 
@@ -102,7 +103,8 @@ Then import the plugin:
 4. Open FigCC → **Settings**.
 5. Leave the URL as `http://localhost:4319`.
 6. Paste the value printed by `npm run bridge:token` and choose **Save & Connect**.
-7. Wait for **Connected**, then return to **Chat**.
+7. Optionally choose **Project workspace → Choose folder…** to link an existing project and its `skills/` folder.
+8. Wait for **Connected**, then return to **Chat**.
 
 ## Use
 
@@ -111,6 +113,17 @@ Then import the plugin:
 3. Choose **Codex** or **Claude** in the header. Changing provider opens a new empty chat and never transfers context.
 4. Choose that provider's live model, reasoning effort, and local-file permission profile beside **Send** when needed.
 5. Review the streamed tool/status messages while FigCC works. History shows a provider badge and restores the matching runtime automatically.
+
+## Project workspace
+
+Settings can link one local project folder through the native macOS folder picker. The authenticated bridge persists that selection in `.figcodex-data/workspace.json`; the Figma iframe cannot submit an arbitrary filesystem path.
+
+- The selected folder becomes the working directory and enforced workspace root for new Codex threads and Claude sessions.
+- Read only remains the default. Selecting a folder does not grant writes; **Workspace** or another explicit provider permission profile still controls local changes.
+- FigCC merges built-in skills with `<selected-folder>/skills/<name>/SKILL.md`. A workspace skill overrides a built-in skill with the same id.
+- Skills are read directly from disk and watched for additions, edits, and removals. FigCC does not copy them or build a separate index.
+- New or imported skills are written to the selected project's `skills/` folder. With no selected project, they use FigCC's built-in `skills/` folder.
+- Changing workspace starts a new empty chat. Saved native threads and sessions resume only when their recorded workspace still matches.
 
 Example requests:
 
@@ -129,9 +142,9 @@ Custom skills are Markdown instruction files:
 - **Passive** skills are included only when invoked with `@skill-name`.
 - Skills discovered directly from the filesystem start as **Passive** when no saved mode exists, so preinstalled or externally added instructions do not silently change every conversation.
 - The agent can create and update skills through reviewed dynamic tools.
-- Example skills live as packages under [`skills/`](skills/).
+- Built-in example skills live as packages under [`skills/`](skills/). A selected project may add live packages under its own `skills/` folder.
 - `.agents/skills` and `.claude/skills` are symlinks to that canonical directory, so both CLIs see the same updates.
-- The bridge watches the canonical directory directly. External file additions, edits, and removals are re-read from disk and pushed to the plugin automatically; no separate skill index is created.
+- The bridge watches the built-in and selected-project directories directly. External file additions, edits, and removals are re-read from disk and pushed to the plugin automatically; no separate skill index is created.
 - In dedicated FigCC provider sessions, native project-skill auto-discovery is disabled. The plugin's **Active** toggle and explicit `@skill-name` invocation are the only ways canonical skills enter a prompt.
 
 Treat third-party skill files as code-like instructions: inspect them before enabling them.

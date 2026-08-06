@@ -117,7 +117,7 @@ export const TOOLS = [
   {
     name: 'create_skill',
     description:
-      'Creates a new custom skill and saves it to the plugin. ' +
+      'Creates a new custom skill in the selected project workspace, or in FigCC when no external workspace is selected. ' +
       'Use this when the user asks to create, add, or generate a new skill document. ' +
       'Skills are instruction documents that shape how the plugin behaves for specific tasks.',
     input_schema: {
@@ -138,9 +138,9 @@ export const TOOLS = [
   {
     name: 'update_skill',
     description:
-      'Updates the content of an existing custom skill that the user has uploaded. ' +
+      'Updates the content of an existing loaded custom skill. When a project workspace is selected, a bundled skill update is saved as a project override. ' +
       'Use this when the user asks to modify, improve, or update one of their loaded skills. ' +
-      'You can only update skills the user has already uploaded — you cannot create new ones with this tool. ' +
+      'You can only update skills already shown by FigCC — use create_skill for a new id. ' +
       'To find available skill ids and names, they are listed in the system prompt under "Custom Skills".',
     input_schema: {
       type: 'object',

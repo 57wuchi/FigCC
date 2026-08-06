@@ -13,6 +13,7 @@ let phase = 1;
 let finished = false;
 let smokeModel = '';
 let smokeEffort = '';
+let workspacePath = '';
 const timeout = setTimeout(() => finish(new Error('Bridge smoke test timed out.')), 180_000);
 
 function send(message) {
@@ -36,6 +37,7 @@ socket.on('open', () => send({ type: 'authenticate', token }));
 socket.on('message', (raw) => {
   const message = JSON.parse(String(raw));
   if (message.type === 'bridge.ready') {
+    workspacePath = String(message.workspace?.path || '');
     const availableModels = Array.isArray(message.models) ? message.models : [];
     const selectedModel = availableModels.find((item) => item.isDefault) || availableModels[0];
     smokeModel = String(selectedModel?.id || '');
@@ -53,6 +55,7 @@ socket.on('message', (raw) => {
       requestId: 'smoke-turn',
       chatId: 'smoke-chat',
       threadId: null,
+      workspacePath,
       prompt: 'Call get_selection exactly once. After the tool result, reply with exactly: selection checked',
       instructions: 'You are a Figma agent. Use the provided dynamic tool. Do not use shell or any other tool.',
       tools: [{
@@ -91,6 +94,7 @@ socket.on('message', (raw) => {
         requestId: 'smoke-resume',
         chatId: 'smoke-chat',
         threadId,
+        workspacePath,
         prompt: 'Without calling a tool, reply with exactly: thread resumed',
         instructions: 'You are a Figma agent. Use only provided dynamic tools when needed. Do not use shell or any other tool.',
         tools: [{

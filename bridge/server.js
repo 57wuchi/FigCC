@@ -10,11 +10,12 @@ import { discoverCodex, readLoginStatus } from './codex-discovery.js';
 import { discoverClaude } from './claude-discovery.js';
 import { ClaudeProvider, CLAUDE_PERMISSION_PROFILES } from './claude-provider.js';
 import { needsDynamicToolReview, reviewDynamicTool } from './dynamic-tool-reviewer.js';
-import { SkillStore } from './skill-store.js';
+import { LinkedSkillStore } from './linked-skill-store.js';
 import {
   normalizePermissionProfiles,
   resolvePermissionProfile,
 } from './permission-profiles.js';
+import { WorkspaceStore } from './workspace-store.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA_DIR = path.join(ROOT, '.figcodex-data');
@@ -41,10 +42,13 @@ let claudeStartupPromise = null;
 let skillWatcher = null;
 let skillWatcherRetry = null;
 let skillWatcherStarting = false;
+let workspaceSelectionPending = false;
 
-const skillStore = new SkillStore({ root: ROOT, dataDir: DATA_DIR });
+const workspaceStore = new WorkspaceStore({ defaultRoot: ROOT, dataDir: DATA_DIR });
+const skillStore = new LinkedSkillStore({ bundledRoot: ROOT, dataDir: DATA_DIR });
 
 const threadOwners = new Map();
+const threadWorkspaceRoots = new Map();
 const activeTurns = new Map();
 const turnContexts = new Map();
 const threadPromptContexts = new Map();
@@ -197,7 +201,7 @@ async function handleCodexRequest(instance, request) {
     });
     review = await reviewDynamicTool({
       codex: instance,
-      root: ROOT,
+      root: threadWorkspaceRoots.get(params.threadId) || workspaceStore.runtimeRoot(),
       userPrompt: turnContexts.get(params.turnId) || threadPromptContexts.get(params.threadId) || '',
       tool: params.tool,
       arguments: params.arguments || {},
@@ -294,7 +298,7 @@ async function ensureCodex() {
     })).filter((model) => model.id);
     try {
       const permissionResult = await instance.request('permissionProfile/list', {
-        cwd: ROOT,
+        cwd: workspaceStore.runtimeRoot(),
         limit: 100,
       });
       permissionProfiles = normalizePermissionProfiles(permissionResult);
@@ -445,6 +449,46 @@ async function startSkillWatcher() {
   }
 }
 
+async function restartSkillWatcher() {
+  if (skillWatcherRetry) {
+    clearTimeout(skillWatcherRetry);
+    skillWatcherRetry = null;
+  }
+  skillWatcher?.close();
+  skillWatcher = null;
+  await startSkillWatcher();
+}
+
+function workspaceBusy() {
+  return activeTurns.size > 0 || Boolean(claudeProvider?.activeTurns?.size);
+}
+
+function broadcastWorkspace(type = 'workspace.state', target = null, extra = {}) {
+  const message = { type, workspace: workspaceStore.publicState(), ...extra };
+  if (target) {
+    send(target, message);
+    return;
+  }
+  for (const socket of sockets) {
+    if (socket.figcodexAuthenticated) send(socket, message);
+  }
+}
+
+async function applyWorkspaceResult(result, target) {
+  if (result.cancelled) {
+    broadcastWorkspace('workspace.state', target, { cancelled: true });
+    return;
+  }
+  if (!result.changed) {
+    broadcastWorkspace('workspace.state', target);
+    return;
+  }
+  skillStore.setWorkspace(workspaceStore.selectedRoot);
+  await restartSkillWatcher();
+  broadcastWorkspace('workspace.changed');
+  await broadcastSkills();
+}
+
 async function executeProviderTool(socket, context) {
   if (context.tool === 'create_skill' || context.tool === 'update_skill') {
     const result = await executeSkillTool(context.tool, context.arguments || {});
@@ -516,8 +560,19 @@ async function startTurn(socket, message) {
     ...message,
     prompt: promptWithFileAttachments(message.prompt, fileAttachments),
   };
+  const workspaceRoot = workspaceStore.runtimeRoot();
+  const claimedWorkspace = String(message.workspacePath || '');
+  const workspaceMatches = claimedWorkspace
+    ? claimedWorkspace === workspaceRoot
+    : workspaceRoot === ROOT;
+  const requestedThreadId = String(message.threadId || '').trim();
+  const knownThreadRoot = requestedThreadId ? threadWorkspaceRoots.get(requestedThreadId) : null;
+  const threadId = workspaceMatches && (!knownThreadRoot || knownThreadRoot === workspaceRoot)
+    ? requestedThreadId
+    : '';
+  message = { ...message, threadId };
   if (provider === 'claude') {
-    await (await ensureClaude()).startTurn(socket, message, normalizeTools(message.tools));
+    await (await ensureClaude()).startTurn(socket, message, normalizeTools(message.tools), workspaceRoot);
     return;
   }
   const instance = await ensureCodex();
@@ -537,14 +592,14 @@ async function startTurn(socket, message) {
   const permissionSettings = permissionProfilesSupported
     ? { permissions: permissionProfile }
     : { sandbox: 'read-only' };
-  let threadId = String(message.threadId || '').trim();
+  let codexThreadId = threadId;
 
-  if (threadId) {
+  if (codexThreadId) {
     try {
       await instance.request('thread/resume', {
-        threadId,
-        cwd: ROOT,
-        runtimeWorkspaceRoots: [ROOT],
+        threadId: codexThreadId,
+        cwd: workspaceRoot,
+        runtimeWorkspaceRoots: [workspaceRoot],
         approvalPolicy: 'on-request',
         approvalsReviewer: 'auto_review',
         config: skillConfig,
@@ -553,14 +608,14 @@ async function startTurn(socket, message) {
         ...(model ? { model } : {}),
       });
     } catch {
-      threadId = '';
+      codexThreadId = '';
     }
   }
 
-  if (!threadId) {
+  if (!codexThreadId) {
     const started = await instance.request('thread/start', {
-      cwd: ROOT,
-      runtimeWorkspaceRoots: [ROOT],
+      cwd: workspaceRoot,
+      runtimeWorkspaceRoots: [workspaceRoot],
       approvalPolicy: 'on-request',
       approvalsReviewer: 'auto_review',
       config: skillConfig,
@@ -571,36 +626,37 @@ async function startTurn(socket, message) {
       dynamicTools: normalizeTools(message.tools),
       ...(model ? { model } : {}),
     });
-    threadId = started?.thread?.id;
-    if (!threadId) throw new Error('Codex app-server did not return a thread id.');
+    codexThreadId = started?.thread?.id;
+    if (!codexThreadId) throw new Error('Codex app-server did not return a thread id.');
   }
 
-  threadOwners.set(threadId, socket);
-  socket.figcodexThreads.add(threadId);
+  threadOwners.set(codexThreadId, socket);
+  threadWorkspaceRoots.set(codexThreadId, workspaceRoot);
+  socket.figcodexThreads.add(codexThreadId);
   const imagePaths = await saveImages(message.chatId, message.images);
   const input = [
     { type: 'text', text: String(message.prompt || ''), text_elements: [] },
     ...imagePaths.map((imagePath) => ({ type: 'localImage', path: imagePath })),
   ];
-  threadPromptContexts.set(threadId, String(message.prompt || '').slice(0, 80_000));
+  threadPromptContexts.set(codexThreadId, String(message.prompt || '').slice(0, 80_000));
   let turn;
   try {
     turn = await instance.request('turn/start', {
-      threadId,
+      threadId: codexThreadId,
       input,
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
     });
   } catch (error) {
-    threadPromptContexts.delete(threadId);
+    threadPromptContexts.delete(codexThreadId);
     throw error;
   }
   const turnId = turn?.turn?.id;
   if (turnId) {
-    activeTurns.set(threadId, turnId);
+    activeTurns.set(codexThreadId, turnId);
     turnContexts.set(turnId, String(message.prompt || '').slice(0, 80_000));
   }
-  send(socket, { type: 'turn.accepted', requestId: message.requestId, threadId, turnId });
+  send(socket, { type: 'turn.accepted', requestId: message.requestId, threadId: codexThreadId, turnId });
 }
 
 async function handleMessage(socket, message, token) {
@@ -622,6 +678,7 @@ async function handleMessage(socket, message, token) {
       models,
       permissionProfiles,
       appServerReady: Boolean(codex?.started),
+      workspace: workspaceStore.publicState(),
     });
     await broadcastSkills(socket);
     return;
@@ -629,6 +686,43 @@ async function handleMessage(socket, message, token) {
 
   if (message.type === 'turn.start') {
     await startTurn(socket, message);
+    return;
+  }
+  if (message.type === 'workspace.choose') {
+    if (workspaceBusy() || workspaceSelectionPending) {
+      send(socket, {
+        type: 'workspace.error',
+        error: workspaceSelectionPending
+          ? 'A workspace folder picker is already open.'
+          : 'Stop the active turn before changing workspace.',
+      });
+      return;
+    }
+    workspaceSelectionPending = true;
+    try {
+      await applyWorkspaceResult(await workspaceStore.choose(), socket);
+    } catch (error) {
+      send(socket, { type: 'workspace.error', error: publicError(error) });
+    } finally {
+      workspaceSelectionPending = false;
+    }
+    return;
+  }
+  if (message.type === 'workspace.clear') {
+    if (workspaceBusy() || workspaceSelectionPending) {
+      send(socket, {
+        type: 'workspace.error',
+        error: workspaceSelectionPending
+          ? 'Close the open workspace folder picker first.'
+          : 'Stop the active turn before changing workspace.',
+      });
+      return;
+    }
+    try {
+      await applyWorkspaceResult(await workspaceStore.clear(), socket);
+    } catch (error) {
+      send(socket, { type: 'workspace.error', error: publicError(error) });
+    }
     return;
   }
   if (message.type === 'turn.interrupt') {
@@ -704,6 +798,8 @@ async function handleMessage(socket, message, token) {
   }
 }
 
+await workspaceStore.initialize();
+skillStore.setWorkspace(workspaceStore.selectedRoot);
 const token = await ensureToken();
 await Promise.allSettled([
   ensureCodex().catch((error) => console.error(`Codex preflight failed: ${publicError(error)}`)),

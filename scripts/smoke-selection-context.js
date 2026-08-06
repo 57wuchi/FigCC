@@ -9,6 +9,7 @@ const token = (await readFile(path.join(root, '.figcodex-data', 'bridge-token'),
 const socket = new WebSocket(process.env.FIGCODEX_WS_URL || process.env.FIGCLAW_WS_URL || 'ws://127.0.0.1:4319/ws');
 const messages = [];
 let finished = false;
+let workspacePath = '';
 const timeout = setTimeout(() => finish(new Error('Selection context smoke test timed out.')), 180_000);
 const onePixelPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
 
@@ -33,11 +34,13 @@ socket.on('open', () => send({ type: 'authenticate', token }));
 socket.on('message', (raw) => {
   const message = JSON.parse(String(raw));
   if (message.type === 'bridge.ready') {
+    workspacePath = String(message.workspace?.path || '');
     send({
       type: 'turn.start',
       requestId: 'selection-context-smoke-turn',
       chatId: 'selection-context-smoke-chat',
       threadId: null,
+      workspacePath,
       prompt: '<figma_selection_context>{"selectedNodeCount":1,"nodes":[{"id":"1:2","name":"Smoke image","type":"RECTANGLE","visualPreviewAttached":true}]}</figma_selection_context>\nReply with exactly: selection context received',
       instructions: 'The user supplied a Figma selection snapshot and image preview. Do not call tools. Reply with exactly: selection context received',
       tools: [{

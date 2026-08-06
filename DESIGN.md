@@ -103,6 +103,8 @@ References:
 - Figma canvas edits execute directly and are visually distinct from filesystem permissions.
 - The default filesystem profile is Read only. Workspace and Full access must remain explicit user choices, and Full access uses warning text in addition to color.
 - Auto review applies to local-file escalation and other local side effects. It must not be described as bypassing permissions.
+- Project workspace selection uses the native macOS folder picker. Show the canonical path as a compact read-only technical value; never use a free-form path field in the Figma iframe.
+- Explain that selecting a workspace changes the provider root and links its live `skills/` folder, but does not grant write permission.
 
 ## Accessibility and quality bar
 

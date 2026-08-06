@@ -165,9 +165,9 @@ export class ClaudeProvider {
     this.activeTurns = new Map();
   }
 
-  baseOptions() {
+  baseOptions(root = this.root) {
     return {
-      cwd: this.root,
+      cwd: root,
       pathToClaudeCodeExecutable: this.binary,
       settingSources: ['project'],
       strictMcpConfig: true,
@@ -229,7 +229,7 @@ export class ClaudeProvider {
     };
   }
 
-  async review({ userPrompt, tool: toolName, arguments: args }) {
+  async review({ userPrompt, tool: toolName, arguments: args, workspaceRoot = this.root }) {
     const proposedArguments = reviewableArguments(toolName, args);
     const prompt = [
       'CURRENT USER REQUEST:',
@@ -245,7 +245,7 @@ export class ClaudeProvider {
     const session = query({
       prompt,
       options: {
-        ...this.baseOptions(),
+        ...this.baseOptions(workspaceRoot),
         abortController: controller,
         persistSession: false,
         permissionMode: 'dontAsk',
@@ -288,7 +288,7 @@ export class ClaudeProvider {
     }
   }
 
-  async startTurn(socket, message, normalizedTools) {
+  async startTurn(socket, message, normalizedTools, workspaceRoot = this.root) {
     const turnId = crypto.randomUUID();
     const requestedSessionId = String(message.threadId || '').trim();
     const selectedModel = this.models.find((model) => model.id === String(message.model || '').trim());
@@ -317,7 +317,12 @@ export class ClaudeProvider {
             turnId,
             tool: definition.name,
           });
-          review = await this.review({ userPrompt, tool: definition.name, arguments: args });
+          review = await this.review({
+            userPrompt,
+            tool: definition.name,
+            arguments: args,
+            workspaceRoot,
+          });
           this.send(socket, {
             type: 'review.completed',
             requestId: reviewRequestId,
@@ -341,6 +346,7 @@ export class ClaudeProvider {
           tool: definition.name,
           arguments: args,
           review,
+          workspaceRoot,
         });
         const isError = Boolean(result && typeof result === 'object' && 'error' in result);
         return {
@@ -363,7 +369,12 @@ export class ClaudeProvider {
       this.send(socket, {
         type: 'review.started', requestId: reviewRequestId, threadId: nativeSessionId, turnId, tool: toolName,
       });
-      const review = await this.review({ userPrompt, tool: toolName, arguments: input });
+      const review = await this.review({
+        userPrompt,
+        tool: toolName,
+        arguments: input,
+        workspaceRoot,
+      });
       this.send(socket, {
         type: 'review.completed', requestId: reviewRequestId, threadId: nativeSessionId, turnId, tool: toolName, ...review,
       });
@@ -375,7 +386,7 @@ export class ClaudeProvider {
     const session = query({
       prompt: promptWithImages(userPrompt, message.images),
       options: {
-        ...this.baseOptions(),
+        ...this.baseOptions(workspaceRoot),
         abortController: controller,
         includePartialMessages: true,
         systemPrompt: String(message.instructions || '').slice(0, 160_000),

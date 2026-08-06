@@ -49,6 +49,13 @@
     permissionProfiles: PermissionProfile[];
   };
 
+  type WorkspaceState = {
+    selected: boolean;
+    path: string;
+    name: string;
+    skillsPath: string;
+  };
+
   type DisplayMessage = {
     role: 'user' | 'assistant' | 'tool' | 'code';
     text: string;
@@ -70,6 +77,7 @@
     sessionId?: string | null;
     provider?: Provider;
     policyVersion?: string;
+    workspacePath?: string;
   };
 
   type DownloadFilePayload = {
@@ -79,8 +87,8 @@
     isBinary?: boolean;
   };
 
-  const CODEX_THREAD_POLICY_VERSION = 'auto-review-v1';
-  const CLAUDE_SESSION_POLICY_VERSION = 'claude-agent-sdk-v1';
+  const CODEX_THREAD_POLICY_VERSION = 'auto-review-workspace-v2';
+  const CLAUDE_SESSION_POLICY_VERSION = 'claude-agent-sdk-workspace-v2';
   const MAX_PROVIDER_IMAGES = 5;
   const MAX_PROVIDER_FILES = 5;
   const MAX_PROVIDER_ATTACHMENT_BYTES = 26 * 1024 * 1024;
@@ -116,6 +124,8 @@
   let bridgeDetail = $state('');
   let provider = $state<Provider>('codex');
   let providerCatalogs = $state<Partial<Record<Provider, ProviderCatalog>>>({});
+  let workspace = $state<WorkspaceState | null>(null);
+  let workspacePending = $state(false);
   let runtimePreferences = $state<Record<Provider, RuntimePreferences>>({
     codex: { model: '', effort: '', permissionProfile: ':read-only' },
     claude: { model: '', effort: '', permissionProfile: ':read-only' },
@@ -138,6 +148,7 @@
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let currentThreadId = $state<string | null>(null);
   let currentTurnId = $state<string | null>(null);
+  let currentChatWorkspacePath = $state('');
   const streamMessageIndexes = new Map<string, number>();
   const pendingSelectionRequests = new Map<string, {
     resolve: (context: SelectionContext | null) => void;
@@ -458,6 +469,70 @@
     bridgeSocket.send(JSON.stringify(message));
   }
 
+  function normalizedWorkspace(input: unknown): WorkspaceState | null {
+    if (!input || typeof input !== 'object') return null;
+    const value = input as Record<string, unknown>;
+    const path = String(value.path || '').trim();
+    if (!path) return null;
+    return {
+      selected: value.selected === true,
+      path,
+      name: String(value.name || path.split('/').filter(Boolean).pop() || 'Workspace'),
+      skillsPath: String(value.skillsPath || `${path.replace(/\/$/, '')}/skills`),
+    };
+  }
+
+  function applyWorkspaceState(input: unknown, changed = false): boolean {
+    const next = normalizedWorkspace(input);
+    workspacePending = false;
+    if (!next) return false;
+    const previousPath = workspace?.path || '';
+    if (changed && previousPath && previousPath !== next.path) {
+      if (displayMessages.length > 0) upsertCurrentChat();
+      workspace = next;
+      resetChatState();
+      statusMessage = `Workspace changed to ${next.name}. Started a new chat.`;
+      return true;
+    }
+    workspace = next;
+    if (currentChatWorkspacePath && currentChatWorkspacePath !== next.path) {
+      if (displayMessages.length > 0) upsertCurrentChat();
+      resetChatState();
+      statusMessage = `The previous chat belongs to another workspace. Started a new ${providerLabel()} chat.`;
+      return true;
+    }
+    if (!currentChatWorkspacePath && displayMessages.length === 0) {
+      currentChatWorkspacePath = next.path;
+    }
+    if (currentThreadId && currentChatWorkspacePath !== next.path) {
+      currentThreadId = null;
+      currentTurnId = null;
+      statusMessage = 'This saved chat belongs to another workspace, so its native session was not resumed.';
+    }
+    return false;
+  }
+
+  function chooseWorkspace() {
+    try {
+      workspacePending = true;
+      sendBridge({ type: 'workspace.choose' });
+      statusMessage = 'Choose a project folder in the macOS dialog.';
+    } catch (error) {
+      workspacePending = false;
+      statusMessage = `Workspace selection failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  function clearWorkspace() {
+    try {
+      workspacePending = true;
+      sendBridge({ type: 'workspace.clear' });
+    } catch (error) {
+      workspacePending = false;
+      statusMessage = `Workspace update failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
   function connectBridge() {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
@@ -498,6 +573,7 @@
       socket.onclose = (event) => {
         if (bridgeSocket !== socket) return;
         bridgeSocket = null;
+        workspacePending = false;
         if (event.code === 4001) {
           bridgeStatus = 'error';
           bridgeDetail = 'Pairing token was rejected. Run npm run bridge:token and paste the current token.';
@@ -548,8 +624,11 @@
   }
 
   function filesystemBoundary(): string {
+    const projectLabel = workspace?.selected
+      ? `the selected ${workspace.name} project workspace`
+      : 'the default FigCC project workspace';
     if (permissionProfile === ':workspace') {
-      return 'The user selected Workspace access. Project-root reads and writes may run within the enforced workspace sandbox; stay inside the FigCC project root and make only explicitly requested file changes.';
+      return `The user selected Workspace access. Project-root reads and writes may run within the enforced workspace sandbox; stay inside ${projectLabel} and make only explicitly requested file changes.`;
     }
     if (permissionProfile === ':danger-full-access') {
       return 'The user selected Full access. There is no filesystem sandbox, but you must still use shell or filesystem tools only for explicit project-file requests and keep every change narrowly scoped.';
@@ -713,6 +792,7 @@
     const type = String(message.type || '');
     if (type === 'bridge.ready') {
       bridgeStatus = 'ready';
+      const workspaceReset = applyWorkspaceState(message.workspace);
       const rawProviders = message.providers && typeof message.providers === 'object'
         ? message.providers as Record<string, unknown>
         : {};
@@ -748,6 +828,9 @@
       statusMessage = activeCatalog?.available
         ? `${providerLabel()} is ready ✨`
         : `${providerLabel()} is not available.`;
+      if (workspaceReset) {
+        statusMessage = `The previous chat belongs to another workspace. Started a new ${providerLabel()} chat.`;
+      }
       if (legacySkillsPending.length > 0) {
         sendBridge({
           type: 'skills.import',
@@ -755,6 +838,20 @@
         });
         legacySkillsPending = [];
       }
+      return;
+    }
+    if (type === 'workspace.state') {
+      applyWorkspaceState(message.workspace);
+      if (message.cancelled === true) statusMessage = 'Workspace selection cancelled.';
+      return;
+    }
+    if (type === 'workspace.changed') {
+      applyWorkspaceState(message.workspace, true);
+      return;
+    }
+    if (type === 'workspace.error') {
+      workspacePending = false;
+      statusMessage = `Workspace update failed: ${String(message.error || 'Unknown error')}`;
       return;
     }
     if (type === 'skills.list') {
@@ -881,6 +978,7 @@
         requestId: makeId(),
         chatId: currentChatId,
         threadId: currentThreadId,
+        workspacePath: workspace?.path || '',
         prompt: userText,
         instructions: `${buildSystemPrompt()}\n\n## Runtime boundary\nUse the provided FigCC tools for all Figma inspection and canvas changes. Canvas tool calls execute directly and are not filesystem permission requests. Reading the exact local paths listed in <attached_files> is part of the user's input and is allowed; never modify those attachment files. Do not use shell, filesystem editing, network access, or subagents for a canvas-only request. Only when the user explicitly asks to create or edit project files may you use ${providerLabel()} filesystem or shell tools. ${filesystemBoundary()}`,
         tools: TOOLS,
@@ -1025,6 +1123,7 @@
         : { sessionId: currentThreadId }),
       provider,
       policyVersion: policyVersionFor(provider),
+      workspacePath: currentChatWorkspacePath || workspace?.path || '',
     };
     const exists = savedChats.some((c) => c.id === currentChatId);
     const updated = exists
@@ -1039,6 +1138,7 @@
     apiHistory = [];
     currentThreadId = null;
     currentTurnId = null;
+    currentChatWorkspacePath = workspace?.path || '';
     streamMessageIndexes.clear();
     currentChatId = makeId();
     tick().then(() => composer?.focusTextarea());
@@ -1068,7 +1168,11 @@
     selectRuntimeForProvider(provider);
     displayMessages = [...chat.displayMessages];
     apiHistory = [...(chat.apiHistory || [])];
-    currentThreadId = chat.policyVersion === policyVersionFor(provider)
+    currentChatWorkspacePath = String(chat.workspacePath || '');
+    const canResumeNativeSession = chat.policyVersion === policyVersionFor(provider)
+      && Boolean(workspace?.path)
+      && chat.workspacePath === workspace?.path;
+    currentThreadId = canResumeNativeSession
       ? provider === 'claude'
         ? chat.sessionId || null
         : chat.threadId || null
@@ -1076,7 +1180,9 @@
     currentTurnId = null;
     streamMessageIndexes.clear();
     currentChatId = chat.id;
-    statusMessage = '';
+    statusMessage = canResumeNativeSession
+      ? ''
+      : 'This chat was saved under another workspace. Its native session was not resumed.';
     activeTab = 'chat';
     scrollBottom();
   }
@@ -1162,6 +1268,7 @@
             ? latest.sessionId || null
             : latest.threadId || null
           : null;
+        currentChatWorkspacePath = String(latest.workspacePath || '');
         currentChatId = latest.id;
       }
       connectBridge();
@@ -1269,8 +1376,13 @@
       connectionDetail={bridgeDetail}
       {provider}
       providers={providerCatalogs}
+      {workspace}
+      {workspacePending}
+      workspaceDisabled={bridgeStatus !== 'ready' || isSending}
       onSave={saveBridgeSettings}
       onReconnect={connectBridge}
+      onChooseWorkspace={chooseWorkspace}
+      onClearWorkspace={clearWorkspace}
     />
   {:else if activeTab === 'skills'}
     <Skills

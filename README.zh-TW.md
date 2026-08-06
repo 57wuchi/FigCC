@@ -37,6 +37,7 @@ FigCC 是獨立的社群專案，與 Figma、Anthropic、OpenAI 均無隸屬或�
 - **可選本機檔案權限**：Codex 預設使用 CLI 的 Read only profile；明確要求專案檔案寫入時才自動審查升級。Workspace 與 Full access 必須由使用者主動選擇。
 - **有驗證的本機傳輸**：bridge 只綁定 loopback，並要求持久保存的隨機 pairing token。
 - **macOS 常駐 bridge**：可安裝使用者層級 LaunchAgent，登入時啟動，意外退出時自動重啟。
+- **可選專案工作區**：Settings 會開啟 macOS 原生資料夾選擇器；選定資料夾會成為 Provider 的專案根目錄，其中即時的 `skills/` 會與 FigCC 內建 skills 合併。
 - **共用原生 Skills**：以 `skills/<name>/SKILL.md` 作為唯一來源，並連結到 `.agents/skills` 與 `.claude/skills`；只需上傳、啟用、`@mention`、建立或更新一次。
 - **歷史記錄與遷移**：聊天可跨 Figma 檔案保存，並相容匯入舊 FigClaw 的設定、歷史、skills 與 pairing token。
 - **雙 Provider 視覺介面**：包含 FigCC 四圓品牌圖形、原生 UI 字體、連線與工具狀態、適合 400 px 外掛面板的模型／effort／權限控制，以及內容過長時可垂直捲動的分頁。
@@ -70,7 +71,7 @@ FigCC 不會為每個 prompt 重新啟動一次 `codex exec`。Claude 則透過�
 | `fetch_docs` | 讀取 allowlist 內的 Figma Plugin API 參考文件。 |
 | `notify` | 顯示 Figma toast。 |
 | `download_files` | 下載產生的文字或二進位檔案，多檔時可使用 ZIP。 |
-| `create_skill`／`update_skill` | 將 Agent 建立或修改的 skill 保存到外掛。 |
+| `create_skill`／`update_skill` | 將 Agent 建立或修改的 skill 保存到選定工作區；未選擇時保存於 FigCC。 |
 
 ## 系統需求
 
@@ -102,7 +103,8 @@ npm run bridge:token
 4. 開啟 FigCC → **Settings**。
 5. Bridge URL 保持 `http://localhost:4319`。
 6. 貼上 `npm run bridge:token` 顯示的 token，按 **Save & Connect**。
-7. 等待顯示 **Connected**，回到 **Chat**。
+7. 若要連動既有專案與其中的 `skills/`，可到 **Project workspace → Choose folder…** 選擇資料夾。
+8. 等待顯示 **Connected**，回到 **Chat**。
 
 ## 使用方式
 
@@ -111,6 +113,17 @@ npm run bridge:token
 3. 在標題右側選擇 **Codex** 或 **Claude**。切換 Provider 會建立全新空白聊天，不會轉移上下文。
 4. 需要時在 **Send** 左側選擇該 Provider 的即時模型、reasoning effort 與本機檔案權限 profile。
 5. 執行期間可在對話中看到串流回答、工具與自動審查狀態。History 會顯示 Provider 標籤，開啟後自動切回正確模式。
+
+## 專案工作區
+
+Settings 可透過 macOS 原生資料夾選擇器連結一個本機專案。通過驗證的 bridge 會把選擇結果保存在 `.figcodex-data/workspace.json`；Figma iframe 不能自行送入任意檔案路徑。
+
+- 選定的資料夾會成為新 Codex thread 與 Claude session 的工作目錄和受限 workspace root。
+- 預設仍為 Read only。選擇資料夾不等於授權寫入；本機變更仍由 **Workspace** 或其他明確選擇的 Provider 權限 profile 控制。
+- FigCC 會合併內建 skills 與 `<選定資料夾>/skills/<name>/SKILL.md`；若 id 相同，以工作區版本覆蓋內建版本。
+- Skill 會直接從磁碟讀取並監看新增、修改與刪除；FigCC 不會複製內容，也不會建立另一份索引。
+- 新建或匯入的 skill 會寫入選定專案的 `skills/`；未選擇專案時才使用 FigCC 內建的 `skills/`。
+- 切換工作區會建立全新空白聊天；保存的原生 thread／session 只有在記錄的工作區仍相符時才會續接。
 
 範例：
 
@@ -129,9 +142,9 @@ npm run bridge:token
 - **Passive**：只有以 `@skill-name` 指定時才會加入。
 - 直接從檔案系統讀到、但尚未保存模式的 skill，預設為 **Passive**，避免預裝或外部新增的指令在未明確啟用時改變所有對話。
 - Agent 可以透過受審查的 dynamic tools 建立或更新 skill。
-- 範例以標準 skill package 形式位於 [`skills/`](skills/)。
+- 內建範例以標準 skill package 形式位於 [`skills/`](skills/)；選定專案也可以在自己的 `skills/` 加入即時套件。
 - `.agents/skills` 與 `.claude/skills` 都連到這個唯一目錄，因此兩個 CLI 會同步看到更新。
-- bridge 會直接監聽 canonical 目錄；從外部新增、修改或刪除檔案後，會重新讀取磁碟內容並自動推送至 Plugin，不會建立另一份 skill 索引。
+- bridge 會直接監聽內建與選定專案的目錄；從外部新增、修改或刪除檔案後，會重新讀取磁碟內容並自動推送至 Plugin，不會建立另一份 skill 索引。
 - FigCC 專用的 Provider session 會停用原生的專案 skill 自動載入；canonical skill 只有透過 Plugin 的 **Active** 開關或明確的 `@skill-name` 才會進入 prompt。
 
 第三方 skill 應視為類似程式碼的指令；啟用前請先閱讀內容。

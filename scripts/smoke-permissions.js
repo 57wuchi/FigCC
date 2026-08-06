@@ -10,6 +10,7 @@ const outputPath = path.join(root, '.figcodex-data', 'auto-review-filesystem-smo
 const marker = `figcodex-auto-review-${Date.now()}`;
 const socket = new WebSocket(process.env.FIGCODEX_WS_URL || process.env.FIGCLAW_WS_URL || 'ws://127.0.0.1:4319/ws');
 let finished = false;
+let workspacePath = '';
 const timeout = setTimeout(() => finish(new Error('Filesystem permission smoke test timed out.')), 240_000);
 
 function send(message) {
@@ -39,11 +40,13 @@ socket.on('open', () => send({ type: 'authenticate', token }));
 socket.on('message', (raw) => {
   const message = JSON.parse(String(raw));
   if (message.type === 'bridge.ready') {
+    workspacePath = String(message.workspace?.path || '');
     send({
       type: 'turn.start',
       requestId: 'filesystem-smoke-turn',
       chatId: 'filesystem-smoke-chat',
       threadId: null,
+      workspacePath,
       prompt: `I explicitly authorize you to create or overwrite only .figcodex-data/auto-review-filesystem-smoke.txt inside this FigCC project. Write exactly this one line: ${marker}`,
       instructions: 'This is an explicit project-file request. Use Codex filesystem or shell tooling only inside the FigCC project root, make exactly the requested one-file change, and do not call the provided Figma tool or use network/subagents. The write is expected to require automatic permission review.',
       tools: [{

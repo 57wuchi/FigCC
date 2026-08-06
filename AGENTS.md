@@ -26,6 +26,7 @@ Figma plugin sandbox → open Figma document
 - `bridge/claude-provider.js` is the Claude Code Agent SDK adapter and in-process FigCC MCP server.
 - `bridge/dynamic-tool-reviewer.js` performs the independent fail-closed review for side-effecting FigCC tools.
 - `bridge/skill-store.js` owns canonical filesystem skill packages under `skills/<name>/SKILL.md`.
+- `bridge/workspace-store.js` owns the authenticated native folder selection and persisted project root; `bridge/linked-skill-store.js` overlays that project's live `skills/` packages on the bundled set.
 - `src/tools.ts` is the dynamic-tool schema source of truth.
 - Do not replace the App Server flow with one `codex exec` subprocess per prompt; that breaks the in-turn client tool handshake and native thread resume.
 - A chat belongs to exactly one provider. Switching Codex/Claude starts a new empty chat; History restores the chat's recorded provider and only its native thread/session ID. Never import transcript text across providers.
@@ -53,7 +54,7 @@ Do not weaken these without an explicit, security-reviewed request:
 - Do not remove a migration fallback without documenting the breaking change.
 - Preserve Codex thread IDs, Claude session IDs, each provider's policy version, and provider ownership when changing chat history.
 - Model and reasoning-effort choices must come from each live provider catalog. Permission choices must reflect the installed provider's supported runtime modes; do not hard-code marketing model names.
-- `skills/` is canonical. Keep `.agents/skills -> ../skills` and `.claude/skills -> ../skills`; do not fork provider-specific copies of the same skill.
+- `skills/` remains the bundled canonical source. Keep `.agents/skills -> ../skills` and `.claude/skills -> ../skills`; do not fork provider-specific copies. A user-selected workspace may overlay live packages from its own `skills/` folder, with same-id workspace packages taking precedence.
 
 ## Pairing-token assistance
 

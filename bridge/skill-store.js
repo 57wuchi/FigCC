@@ -67,10 +67,10 @@ function withFrontmatter(content, slug, name) {
 }
 
 export class SkillStore {
-  constructor({ root, dataDir }) {
+  constructor({ root, dataDir, modeFile = null }) {
     this.root = root;
     this.skillsDir = path.join(root, 'skills');
-    this.modeFile = path.join(dataDir, 'skill-modes.json');
+    this.modeFile = modeFile || path.join(dataDir, 'skill-modes.json');
   }
 
   async readModes() {
@@ -88,8 +88,10 @@ export class SkillStore {
   }
 
   async list() {
-    await mkdir(this.skillsDir, { recursive: true });
-    const entries = await readdir(this.skillsDir, { withFileTypes: true });
+    const entries = await readdir(this.skillsDir, { withFileTypes: true }).catch((error) => {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    });
     const modes = await this.readModes();
     const skills = [];
     for (const entry of entries.slice(0, 200)) {
@@ -140,14 +142,19 @@ export class SkillStore {
   }
 
   async watchChanges(onChange, onError) {
-    await mkdir(this.skillsDir, { recursive: true });
     let debounceTimer = null;
     let closed = false;
     const watchedPaths = new Set();
 
     const syncWatchedPaths = async () => {
-      const nextPaths = new Set([this.skillsDir]);
-      const entries = await readdir(this.skillsDir, { withFileTypes: true });
+      // Watch the project root as well as the skills directory so creating a
+      // previously missing `skills/` folder is detected without mutating the
+      // selected workspace merely by linking it.
+      const nextPaths = new Set([this.root, this.skillsDir]);
+      const entries = await readdir(this.skillsDir, { withFileTypes: true }).catch((error) => {
+        if (error?.code === 'ENOENT') return [];
+        throw error;
+      });
       for (const entry of entries.slice(0, 200)) {
         if (entry.isDirectory() && SLUG_PATTERN.test(entry.name)) {
           const directory = path.join(this.skillsDir, entry.name);
