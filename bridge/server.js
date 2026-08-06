@@ -4,9 +4,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
+import { promptWithFileAttachments, saveFileAttachments } from './attachment-store.js';
 import { CodexAppServer } from './codex-app-server.js';
 import { discoverCodex, readLoginStatus } from './codex-discovery.js';
+import { discoverClaude } from './claude-discovery.js';
+import { ClaudeProvider, CLAUDE_PERMISSION_PROFILES } from './claude-provider.js';
 import { needsDynamicToolReview, reviewDynamicTool } from './dynamic-tool-reviewer.js';
+import { SkillStore } from './skill-store.js';
 import {
   normalizePermissionProfiles,
   resolvePermissionProfile,
@@ -20,16 +24,25 @@ const LEGACY_TOKEN_FILE = path.join(LEGACY_DATA_DIR, 'bridge-token');
 const HOST = process.env.FIGCODEX_HOST || process.env.FIGCLAW_HOST || '127.0.0.1';
 const PORT = Number(process.env.FIGCODEX_PORT || process.env.FIGCLAW_PORT || 4319);
 const MAX_MESSAGE_BYTES = 40 * 1024 * 1024;
-const BRIDGE_VERSION = '2.0.0';
+const BRIDGE_VERSION = '3.0.0';
 
 let codexInfo = null;
 let loginStatus = null;
 let codex = null;
-let startupError = null;
+let codexError = null;
 let models = [];
 let permissionProfiles = normalizePermissionProfiles(null);
 let permissionProfilesSupported = false;
 let startupPromise = null;
+let claudeInfo = null;
+let claudeProvider = null;
+let claudeError = null;
+let claudeStartupPromise = null;
+let skillWatcher = null;
+let skillWatcherRetry = null;
+let skillWatcherStarting = false;
+
+const skillStore = new SkillStore({ root: ROOT, dataDir: DATA_DIR });
 
 const threadOwners = new Map();
 const activeTurns = new Map();
@@ -73,9 +86,11 @@ function attachCodexEvents(instance) {
     if (message) console.error(`[codex] ${message}`);
   });
   instance.on('closed', (error) => {
-    startupError = publicError(error);
+    codexError = publicError(error);
     codex = null;
-    for (const socket of sockets) send(socket, { type: 'bridge.error', error: startupError });
+    for (const socket of sockets) send(socket, {
+      type: 'provider.error', provider: 'codex', error: codexError,
+    });
   });
   instance.on('notification', ({ method, params }) => {
     const socket = params?.threadId ? threadOwners.get(params.threadId) : null;
@@ -218,7 +233,24 @@ async function handleCodexRequest(instance, request) {
     }
   }
 
-  pendingToolCalls.set(String(request.id), { requestId: request.id, socket });
+  if (params.tool === 'create_skill' || params.tool === 'update_skill') {
+    try {
+      const result = await executeSkillTool(params.tool, params.arguments || {});
+      instance.respond(request.id, {
+        contentItems: [{ type: 'inputText', text: JSON.stringify(result) }],
+        success: true,
+      });
+      await broadcastSkills();
+    } catch (error) {
+      instance.respond(request.id, {
+        contentItems: [{ type: 'inputText', text: publicError(error) }],
+        success: false,
+      });
+    }
+    return;
+  }
+
+  pendingToolCalls.set(String(request.id), { provider: 'codex', requestId: request.id, socket });
   send(socket, {
     type: 'tool.call',
     requestId: String(request.id),
@@ -236,7 +268,7 @@ async function ensureCodex() {
   if (codex?.started) return codex;
   if (startupPromise) return startupPromise;
   startupPromise = (async () => {
-    startupError = null;
+    codexError = null;
     codexInfo = await discoverCodex();
     loginStatus = await readLoginStatus(codexInfo.binary);
     if (!loginStatus.ok) {
@@ -282,11 +314,158 @@ async function ensureCodex() {
   try {
     return await startupPromise;
   } catch (error) {
-    startupError = publicError(error);
+    codexError = publicError(error);
     throw error;
   } finally {
     startupPromise = null;
   }
+}
+
+async function ensureClaude() {
+  if (claudeProvider) return claudeProvider;
+  if (claudeStartupPromise) return claudeStartupPromise;
+  claudeStartupPromise = (async () => {
+    claudeError = null;
+    claudeInfo = await discoverClaude();
+    const provider = new ClaudeProvider({
+      root: ROOT,
+      binary: claudeInfo.binary,
+      version: claudeInfo.version,
+      send,
+      executeTool: executeProviderTool,
+    });
+    await provider.initialize();
+    claudeProvider = provider;
+    return provider;
+  })();
+  try {
+    return await claudeStartupPromise;
+  } catch (error) {
+    claudeError = publicError(error);
+    throw error;
+  } finally {
+    claudeStartupPromise = null;
+  }
+}
+
+function codexCatalog() {
+  return {
+    id: 'codex',
+    label: 'Codex',
+    available: Boolean(codex?.started),
+    cliVersion: codexInfo?.version || '',
+    auth: loginStatus?.message || (codexError ? '' : 'Logged in'),
+    models,
+    permissionProfiles,
+    ...(codexError ? { error: codexError } : {}),
+  };
+}
+
+function claudeCatalog() {
+  return claudeProvider?.catalog() || {
+    id: 'claude',
+    label: 'Claude',
+    available: false,
+    cliVersion: claudeInfo?.version || '',
+    auth: '',
+    models: [],
+    permissionProfiles: CLAUDE_PERMISSION_PROFILES.map((profile) => ({ ...profile })),
+    ...(claudeError ? { error: claudeError } : {}),
+  };
+}
+
+async function ensureProviders() {
+  await Promise.allSettled([ensureCodex(), ensureClaude()]);
+  if (!codex?.started && !claudeProvider) {
+    throw new Error(`No local provider is ready. Codex: ${codexError || 'unavailable'} Claude: ${claudeError || 'unavailable'}`);
+  }
+}
+
+async function executeSkillTool(tool, args) {
+  if (tool === 'create_skill') {
+    return skillStore.create({ name: args?.name, content: args?.content, mode: args?.mode });
+  }
+  if (tool === 'update_skill') {
+    return skillStore.update({ id: args?.id, name: args?.name, content: args?.content });
+  }
+  throw new Error(`Unsupported skill tool: ${tool}`);
+}
+
+async function broadcastSkills(target = null) {
+  let skills;
+  try {
+    skills = await skillStore.list();
+  } catch (error) {
+    const message = { type: 'skills.error', error: `Could not refresh skills: ${publicError(error)}` };
+    console.error(`[skills] ${message.error}`);
+    if (target) {
+      send(target, message);
+      return false;
+    }
+    for (const socket of sockets) {
+      if (socket.figcodexAuthenticated) send(socket, message);
+    }
+    return false;
+  }
+  const message = { type: 'skills.list', skills };
+  if (target) {
+    send(target, message);
+    return true;
+  }
+  for (const socket of sockets) {
+    if (socket.figcodexAuthenticated) send(socket, message);
+  }
+  return true;
+}
+
+function scheduleSkillWatcherRestart(error) {
+  if (error) console.error(`[skills] Filesystem monitor unavailable: ${publicError(error)}`);
+  skillWatcher?.close();
+  skillWatcher = null;
+  if (skillWatcherRetry) return;
+  skillWatcherRetry = setTimeout(() => {
+    skillWatcherRetry = null;
+    void startSkillWatcher();
+  }, 5_000);
+  skillWatcherRetry.unref?.();
+}
+
+async function startSkillWatcher() {
+  if (skillWatcher || skillWatcherStarting) return;
+  skillWatcherStarting = true;
+  try {
+    skillWatcher = await skillStore.watchChanges(
+      () => broadcastSkills(),
+      (error) => scheduleSkillWatcherRestart(error)
+    );
+  } catch (error) {
+    scheduleSkillWatcherRestart(error);
+  } finally {
+    skillWatcherStarting = false;
+  }
+}
+
+async function executeProviderTool(socket, context) {
+  if (context.tool === 'create_skill' || context.tool === 'update_skill') {
+    const result = await executeSkillTool(context.tool, context.arguments || {});
+    await broadcastSkills();
+    return result;
+  }
+  const requestId = crypto.randomUUID();
+  return new Promise((resolve) => {
+    pendingToolCalls.set(requestId, { provider: 'claude', socket, resolve });
+    send(socket, {
+      type: 'tool.call',
+      requestId,
+      threadId: context.threadId,
+      turnId: context.turnId,
+      callId: context.callId,
+      namespace: 'figcodex',
+      tool: context.tool,
+      arguments: context.arguments || {},
+      ...(context.review ? { review: context.review } : {}),
+    });
+  });
 }
 
 function normalizeTools(rawTools) {
@@ -324,8 +503,28 @@ async function saveImages(chatId, images) {
 }
 
 async function startTurn(socket, message) {
+  const provider = String(message.provider || 'codex');
+  if (provider !== 'codex' && provider !== 'claude') {
+    throw new Error(`Unknown provider: ${provider}`);
+  }
+  const fileAttachments = await saveFileAttachments({
+    dataDir: DATA_DIR,
+    chatId: message.chatId,
+    files: message.files,
+  });
+  message = {
+    ...message,
+    prompt: promptWithFileAttachments(message.prompt, fileAttachments),
+  };
+  if (provider === 'claude') {
+    await (await ensureClaude()).startTurn(socket, message, normalizeTools(message.tools));
+    return;
+  }
   const instance = await ensureCodex();
   const developerInstructions = String(message.instructions || '').slice(0, 160_000);
+  // The plugin owns skill activation and @mention injection. Disable native
+  // auto-discovery for the same canonical files so Passive cannot be bypassed.
+  const skillConfig = await skillStore.disabledNativeSkillConfig();
   const requestedModel = String(message.model || '').trim();
   const selectedModel = models.find((item) => item.id === requestedModel);
   const model = selectedModel?.id;
@@ -339,7 +538,6 @@ async function startTurn(socket, message) {
     ? { permissions: permissionProfile }
     : { sandbox: 'read-only' };
   let threadId = String(message.threadId || '').trim();
-  let resumed = false;
 
   if (threadId) {
     try {
@@ -349,11 +547,11 @@ async function startTurn(socket, message) {
         runtimeWorkspaceRoots: [ROOT],
         approvalPolicy: 'on-request',
         approvalsReviewer: 'auto_review',
+        config: skillConfig,
         ...permissionSettings,
         developerInstructions,
         ...(model ? { model } : {}),
       });
-      resumed = true;
     } catch {
       threadId = '';
     }
@@ -365,6 +563,7 @@ async function startTurn(socket, message) {
       runtimeWorkspaceRoots: [ROOT],
       approvalPolicy: 'on-request',
       approvalsReviewer: 'auto_review',
+      config: skillConfig,
       ...permissionSettings,
       serviceName: 'figcodex_local_bridge',
       developerInstructions,
@@ -379,11 +578,8 @@ async function startTurn(socket, message) {
   threadOwners.set(threadId, socket);
   socket.figcodexThreads.add(threadId);
   const imagePaths = await saveImages(message.chatId, message.images);
-  const importedContext = !resumed && message.fallbackContext
-    ? `Imported conversation context from the previous FigClaw provider:\n\n${String(message.fallbackContext).slice(0, 30_000)}\n\n---\n\n`
-    : '';
   const input = [
-    { type: 'text', text: `${importedContext}${String(message.prompt || '')}`, text_elements: [] },
+    { type: 'text', text: String(message.prompt || ''), text_elements: [] },
     ...imagePaths.map((imagePath) => ({ type: 'localImage', path: imagePath })),
   ];
   threadPromptContexts.set(threadId, String(message.prompt || '').slice(0, 80_000));
@@ -415,17 +611,19 @@ async function handleMessage(socket, message, token) {
       return;
     }
     socket.figcodexAuthenticated = true;
-    const instance = await ensureCodex();
+    await ensureProviders();
     send(socket, {
       type: 'bridge.ready',
       bridgeVersion: BRIDGE_VERSION,
+      providers: { codex: codexCatalog(), claude: claudeCatalog() },
       cliVersion: codexInfo?.version || '',
       codexBin: codexInfo?.binary || '',
       auth: loginStatus?.message || 'Logged in',
       models,
       permissionProfiles,
-      appServerReady: Boolean(instance.started),
+      appServerReady: Boolean(codex?.started),
     });
+    await broadcastSkills(socket);
     return;
   }
 
@@ -434,9 +632,14 @@ async function handleMessage(socket, message, token) {
     return;
   }
   if (message.type === 'turn.interrupt') {
+    const provider = String(message.provider || 'codex');
     const threadId = String(message.threadId || '');
     const turnId = String(message.turnId || activeTurns.get(threadId) || '');
-    if (threadId && turnId) await (await ensureCodex()).request('turn/interrupt', { threadId, turnId });
+    if (provider === 'claude') {
+      await (await ensureClaude()).interrupt(threadId, turnId);
+    } else if (threadId && turnId) {
+      await (await ensureCodex()).request('turn/interrupt', { threadId, turnId });
+    }
     return;
   }
   if (message.type === 'tool.result') {
@@ -445,38 +648,85 @@ async function handleMessage(socket, message, token) {
     pendingToolCalls.delete(String(message.requestId));
     const result = message.result === undefined ? { ok: true } : message.result;
     const success = message.success !== false && !(result && typeof result === 'object' && 'error' in result);
-    (await ensureCodex()).respond(pending.requestId, {
-      contentItems: [{ type: 'inputText', text: JSON.stringify(result).slice(0, 500_000) }],
-      success,
-    });
+    if (pending.provider === 'claude') {
+      pending.resolve(result);
+    } else {
+      (await ensureCodex()).respond(pending.requestId, {
+        contentItems: [{ type: 'inputText', text: JSON.stringify(result).slice(0, 500_000) }],
+        success,
+      });
+    }
     return;
   }
   if (message.type === 'models.list') {
-    send(socket, { type: 'models.list', models });
+    const provider = String(message.provider || 'codex');
+    send(socket, {
+      type: 'models.list',
+      provider,
+      models: provider === 'claude' ? claudeProvider?.models || [] : models,
+    });
+    return;
+  }
+  if (message.type === 'skills.list') {
+    await broadcastSkills(socket);
+    return;
+  }
+  if (message.type === 'skills.import') {
+    await skillStore.importLegacy(message.skills);
+    await broadcastSkills();
+    return;
+  }
+  if (message.type === 'skills.create') {
+    try {
+      await skillStore.create(message.skill || {});
+      await broadcastSkills();
+    } catch (error) {
+      send(socket, { type: 'skills.error', error: publicError(error) });
+    }
+    return;
+  }
+  if (message.type === 'skills.remove') {
+    try {
+      await skillStore.remove(message.id);
+      await broadcastSkills();
+    } catch (error) {
+      send(socket, { type: 'skills.error', error: publicError(error) });
+    }
+    return;
+  }
+  if (message.type === 'skills.mode') {
+    try {
+      await skillStore.setMode(message.id, message.mode);
+      await broadcastSkills();
+    } catch (error) {
+      send(socket, { type: 'skills.error', error: publicError(error) });
+    }
   }
 }
 
 const token = await ensureToken();
-await ensureCodex().catch((error) => {
-  startupError = publicError(error);
-  console.error(`Codex preflight failed: ${startupError}`);
-});
+await Promise.allSettled([
+  ensureCodex().catch((error) => console.error(`Codex preflight failed: ${publicError(error)}`)),
+  ensureClaude().catch((error) => console.error(`Claude preflight failed: ${publicError(error)}`)),
+]);
 
 const server = http.createServer((request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
-    response.writeHead(startupError ? 503 : 200, {
+    const ready = Boolean(codex?.started || claudeProvider);
+    response.writeHead(ready ? 200 : 503, {
       'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'no-store',
     });
     response.end(JSON.stringify({
-      ok: !startupError,
-      service: 'figcodex-codex-bridge',
+      ok: ready,
+      service: 'figcodex-local-bridge',
       version: BRIDGE_VERSION,
       cliVersion: codexInfo?.version || null,
       loggedIn: Boolean(loginStatus?.ok),
       requiresPairingToken: true,
-      error: startupError,
+      providers: { codex: codexCatalog(), claude: claudeCatalog() },
+      error: ready ? null : `Codex: ${codexError || 'unavailable'} Claude: ${claudeError || 'unavailable'}`,
     }));
     return;
   }
@@ -526,24 +776,34 @@ webSocketServer.on('connection', (socket) => {
     for (const [requestId, pending] of pendingToolCalls.entries()) {
       if (pending.socket !== socket) continue;
       pendingToolCalls.delete(requestId);
-      codex?.respond(pending.requestId, {
-        contentItems: [{ type: 'inputText', text: 'FigCodex plugin disconnected before the tool completed.' }],
-        success: false,
-      });
+      if (pending.provider === 'claude') {
+        pending.resolve({ error: 'FigCodex plugin disconnected before the tool completed.' });
+      } else {
+        codex?.respond(pending.requestId, {
+          contentItems: [{ type: 'inputText', text: 'FigCodex plugin disconnected before the tool completed.' }],
+          success: false,
+        });
+      }
     }
   });
 });
 
 server.listen(PORT, HOST, () => {
   console.log(`FigCodex Bridge listening on http://${HOST}:${PORT}`);
-  console.log(`Pairing token: ${token}`);
+  console.log('Pairing token ready. Run npm run bridge:token to copy it safely.');
   if (codexInfo) console.log(`Codex CLI ${codexInfo.version}: ${codexInfo.binary}`);
-  if (startupError) console.log(`Startup warning: ${startupError}`);
+  if (claudeInfo) console.log(`Claude Code ${claudeInfo.version}: ${claudeInfo.binary}`);
+  if (codexError) console.log(`Codex warning: ${codexError}`);
+  if (claudeError) console.log(`Claude warning: ${claudeError}`);
 });
+void startSkillWatcher();
 
 async function shutdown() {
+  if (skillWatcherRetry) clearTimeout(skillWatcherRetry);
+  skillWatcher?.close();
   for (const socket of sockets) socket.close(1001, 'Bridge shutting down');
   await codex?.stop();
+  await claudeProvider?.close();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2_000).unref();
 }

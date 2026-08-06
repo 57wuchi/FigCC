@@ -15,9 +15,11 @@ const PREVIEW_MAX_EDGE = 768;
 const DEFAULT_SETTINGS = {
   bridgeUrl: 'http://localhost:4319',
   bridgeToken: '',
-  model: '',
-  effort: '',
-  permissionProfile: ':read-only',
+  provider: 'codex' as 'codex' | 'claude',
+  runtimes: {
+    codex: { model: '', effort: '', permissionProfile: ':read-only' },
+    claude: { model: '', effort: '', permissionProfile: ':read-only' },
+  },
 };
 
 figma.showUI(__html__, { themeColors: true, width: 400, height: 680 });
@@ -40,23 +42,49 @@ async function getSettings(): Promise<typeof DEFAULT_SETTINGS> {
   const raw = await figma.clientStorage.getAsync(STORAGE_KEY_SETTINGS)
     || await figma.clientStorage.getAsync(LEGACY_STORAGE_KEY_SETTINGS);
   const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const runtimes = value.runtimes && typeof value.runtimes === 'object'
+    ? value.runtimes as Record<string, Record<string, unknown>>
+    : {};
   return {
     bridgeUrl: String(value.bridgeUrl || DEFAULT_SETTINGS.bridgeUrl),
     bridgeToken: String(value.bridgeToken || ''),
-    model: String(value.model || ''),
-    effort: String(value.effort || ''),
-    permissionProfile: String(value.permissionProfile || DEFAULT_SETTINGS.permissionProfile),
+    provider: value.provider === 'claude' ? 'claude' : 'codex',
+    runtimes: {
+      codex: {
+        model: String(runtimes.codex?.model || value.model || ''),
+        effort: String(runtimes.codex?.effort || value.effort || ''),
+        permissionProfile: String(runtimes.codex?.permissionProfile || value.permissionProfile || ':read-only'),
+      },
+      claude: {
+        model: String(runtimes.claude?.model || ''),
+        effort: String(runtimes.claude?.effort || ''),
+        permissionProfile: String(runtimes.claude?.permissionProfile || ':read-only'),
+      },
+    },
   };
 }
 
 async function saveSettings(input: unknown): Promise<void> {
   const value = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const runtimes = value.runtimes && typeof value.runtimes === 'object'
+    ? value.runtimes as Record<string, Record<string, unknown>>
+    : {};
   const settings = {
     bridgeUrl: String(value.bridgeUrl || DEFAULT_SETTINGS.bridgeUrl).trim(),
     bridgeToken: String(value.bridgeToken || '').trim(),
-    model: String(value.model || '').trim(),
-    effort: String(value.effort || '').trim(),
-    permissionProfile: String(value.permissionProfile || DEFAULT_SETTINGS.permissionProfile).trim(),
+    provider: value.provider === 'claude' ? 'claude' as const : 'codex' as const,
+    runtimes: {
+      codex: {
+        model: String(runtimes.codex?.model || '').trim(),
+        effort: String(runtimes.codex?.effort || '').trim(),
+        permissionProfile: String(runtimes.codex?.permissionProfile || ':read-only').trim(),
+      },
+      claude: {
+        model: String(runtimes.claude?.model || '').trim(),
+        effort: String(runtimes.claude?.effort || '').trim(),
+        permissionProfile: String(runtimes.claude?.permissionProfile || ':read-only').trim(),
+      },
+    },
   };
   await figma.clientStorage.setAsync(STORAGE_KEY_SETTINGS, settings);
   figma.ui.postMessage({ type: 'settings-saved', settings });
@@ -80,16 +108,24 @@ async function saveSkills(skills: unknown[]): Promise<void> {
 }
 
 async function saveRuntimePreferences(
+  provider: unknown,
   model: unknown,
   effort: unknown,
   permissionProfile: unknown
 ): Promise<void> {
   const current = await getSettings();
+  const providerId = provider === 'claude' ? 'claude' : 'codex';
   await figma.clientStorage.setAsync(STORAGE_KEY_SETTINGS, {
     ...current,
-    model: String(model || '').trim(),
-    effort: String(effort || '').trim(),
-    permissionProfile: String(permissionProfile || DEFAULT_SETTINGS.permissionProfile).trim(),
+    provider: providerId,
+    runtimes: {
+      ...current.runtimes,
+      [providerId]: {
+        model: String(model || '').trim(),
+        effort: String(effort || '').trim(),
+        permissionProfile: String(permissionProfile || ':read-only').trim(),
+      },
+    },
   });
 }
 
@@ -124,7 +160,7 @@ async function handleStorageMessage(msg: PluginMessage): Promise<boolean> {
   }
 
   if (msg.type === 'save-runtime-preferences') {
-    await saveRuntimePreferences(msg.model, msg.effort, msg.permissionProfile);
+    await saveRuntimePreferences(msg.provider, msg.model, msg.effort, msg.permissionProfile);
     return true;
   }
 
