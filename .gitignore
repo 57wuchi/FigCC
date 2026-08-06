@@ -13,6 +13,9 @@ pnpm-lock.yaml
 .figclaw-data
 .codex-schema
 
+# Local-only skill packages
+/skills/designer/
+
 public/build
 public/code.js
 public/index.html
